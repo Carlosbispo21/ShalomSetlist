@@ -1,5 +1,12 @@
 # Alterações
 
+## 0.3.2
+
+- Festividade com partituras permanentes separadas pelos seis grupos da banda.
+- Envio e exclusão restritos aos responsáveis, com confirmação para remover partituras da festividade.
+- Festividades e anotações locais preservadas na troca de semana; PDFs já baixados disponíveis offline.
+- Navegação do leitor restrita às músicas da festividade do mesmo grupo.
+
 ## 0.3.1
 
 - No modo contínuo, o toque à direita abre o próximo hino do dia; à esquerda, o anterior. Rolagem e arrastes não trocam a música.

@@ -29,7 +29,7 @@ Deno.serve(async (request: Request) => {
         }
       }
     }
-    const { error } = await client.from('scores').delete().lt('week', week);
+    const { error } = await client.from('scores').delete().eq('scope', 'weekly').lt('week', week);
     if (error) throw error;
     return Response.json({ removed, week });
   } catch (error) {

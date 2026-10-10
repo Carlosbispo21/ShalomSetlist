@@ -1,8 +1,9 @@
 export const GROUPS = ['Crianças', 'Adolescentes', 'Jovens', 'Varões', 'Irmãs', 'Grupo de louvor'] as const;
 export type Group = typeof GROUPS[number];
 export type Day = 'saturday' | 'sunday';
+export type ScoreScope = 'weekly' | 'festivity';
 export type Score = {
-  id: string; title: string; group: Group; day: Day; week: string;
+  id: string; title: string; group: Group; day: Day; week: string | null; scope?: ScoreScope;
   bpm: number; pages: number; position: number; filename: string;
   storagePath?: string; roomId?: string; demo?: boolean;
 };
@@ -34,3 +35,11 @@ export function formatDate(date: Date, options: Intl.DateTimeFormatOptions) {
 export function validBpm(value: number) { return Math.max(30, Math.min(240, Math.round(value) || 80)); }
 export const MAX_PDF_BYTES = 20 * 1024 * 1024;
 export function sortScores(scores: Score[]) { return [...scores].sort((a, b) => a.position - b.position || a.title.localeCompare(b.title, 'pt-BR')); }
+export const isFestivity = (score: Score) => score.scope === 'festivity';
+export const isActiveScore = (score: Score, week: string) => isFestivity(score) || score.week === week;
+export const isExpiredScore = (score: Score, week: string) => !isFestivity(score) && score.week !== null && score.week < week;
+export function scoreFolder(score: Score) {
+  if (isFestivity(score)) return 'festivity';
+  if (!score.week) throw new Error('Informe a semana do repertório.');
+  return score.week;
+}

@@ -73,3 +73,17 @@ test('preserva o PDF quando o cadastro foi salvo mas a resposta da rede se perde
   expect(calls.rows).toHaveLength(1);
   expect(calls.removals).toBe(0);
 });
+
+test('envia festividade para a pasta permanente com semana nula', async ({ page }) => {
+  const calls = await connectMockBand(page,false);
+  await page.getByRole('button',{name:'Festividade',exact:true}).click();
+  await page.getByRole('button',{name:/^Crianças/}).click();
+  await page.getByRole('button',{name:'Enviar partituras',exact:true}).click();
+  const pdf = await PDFDocument.create(); pdf.addPage();
+  await page.getByLabel('Selecionar PDFs').setInputFiles({name:'Festividade infantil.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  await page.getByRole('button',{name:'Enviar para a banda'}).click();
+  await expect(page.getByRole('button',{name:/^Festividade infantil/})).toBeVisible();
+  expect(calls.rows).toHaveLength(1);
+  expect(calls.rows[0]).toMatchObject({scope:'festivity',week:null,group_name:'Crianças'});
+  expect(calls.rows[0].storage_path).toMatch(new RegExp(`^${roomId}/festivity/[^/]+\\.pdf$`));
+});

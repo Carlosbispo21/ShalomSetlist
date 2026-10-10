@@ -2,7 +2,7 @@
 
 O Cloudflare Pages hospeda a interface do app. As contas, o repertório e os PDFs ficam no seu Supabase. Pelo GitHub, configure a URL e a chave **pública** nas variáveis de build do Cloudflare, conforme abaixo. Os APKs e o ZIP já compilados neste computador incluem essa configuração.
 
-Guia revisado para a versão **0.3.1**. Use o fluxo pelo GitHub para publicar a web automaticamente.
+Guia revisado para a versão **0.3.2**. Use o fluxo pelo GitHub para publicar a web automaticamente.
 
 ## Publicar pelo GitHub no Cloudflare Pages
 
@@ -92,3 +92,7 @@ A rotina externa já configurada está descrita em `GUIA_DISPONIBILIDADE.md`. El
 ## Limpeza automática dos PDFs
 
 A limpeza da tela/local e as regras de leitura já acompanham a semana. Para liberar espaço dos PDFs antigos no Supabase com o app fechado, configure a função `weekly-cleanup` e o Cron descritos no `README.md`. A hospedagem da interface não configura esse agendamento por conta própria.
+
+## Festividade
+
+A versão 0.3.2 inclui partituras permanentes por grupo. Consulte [GUIA_FESTIVIDADE.md](GUIA_FESTIVIDADE.md). A migração já foi executada no seu Supabase; publicar a interface atualizada ativa a nova tela.

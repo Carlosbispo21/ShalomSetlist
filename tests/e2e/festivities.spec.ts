@@ -1,0 +1,38 @@
+import { test, expect } from '@playwright/test';
+import { PDFDocument } from 'pdf-lib';
+
+test('festividade permanece após segunda-feira, abre offline e só sai com confirmação', async ({ page, context }, testInfo) => {
+  await page.clock.install({ time: new Date('2026-10-11T23:58:00-03:00') });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Explorar com exemplos' }).click();
+  await page.getByRole('button', { name: 'Festividade', exact: true }).click();
+  await page.getByRole('button', { name: /^Jovens/ }).click();
+  await page.getByRole('button', { name: 'Adicionar partituras', exact: true }).click();
+  await expect(page.getByLabel('Dia', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Grupo', { exact: true })).toHaveValue('Jovens');
+  const pdf = await PDFDocument.create(); pdf.addPage();
+  await page.getByLabel('Selecionar PDFs').setInputFiles({ name:'Celebração.pdf', mimeType:'application/pdf', buffer:Buffer.from(await pdf.save()) });
+  await page.getByRole('button', { name:'Salvar neste aparelho' }).click();
+  await expect(page.getByRole('button', { name:/^Celebração/ })).toBeVisible();
+  await page.screenshot({ path:`artifacts/${testInfo.project.name}-festividade.png`, fullPage:true });
+  await page.getByRole('button', { name:/^Celebração/ }).click();
+  await expect(page.getByLabel('Partitura, página 1')).toBeVisible();
+  await page.clock.setSystemTime(new Date('2026-10-19T00:01:00-03:00'));
+  await page.clock.runFor(61000);
+  await expect(page.getByLabel('Partitura, página 1')).toBeVisible();
+  await page.getByRole('button', { name:'Voltar ao repertório' }).click();
+  await page.getByRole('button', { name:'Repertório', exact:true }).click();
+  await expect(page.getByRole('button', { name:/^Exemplo 01/ })).toHaveCount(0);
+  await page.getByRole('button', { name:'Festividade', exact:true }).click();
+  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  await context.setOffline(true);
+  await page.getByRole('button', { name:/^Celebração/ }).click();
+  await expect(page.getByLabel('Partitura, página 1')).toBeVisible();
+  await page.getByRole('button', { name:'Voltar ao repertório' }).click();
+  await page.getByRole('button', { name:'Remover Celebração', exact:true }).click();
+  await page.getByRole('button', { name:'Cancelar', exact:true }).click();
+  await expect(page.getByRole('button', { name:/^Celebração/ })).toBeVisible();
+  await page.getByRole('button', { name:'Remover Celebração', exact:true }).click();
+  await page.getByRole('button', { name:'Remover partitura', exact:true }).click();
+  await expect(page.getByRole('button', { name:/^Celebração/ })).toHaveCount(0);
+});

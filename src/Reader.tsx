@@ -4,7 +4,7 @@ import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import { ArrowLeft, ChevronLeft, ChevronRight, Columns2, Rows3, PenLine, Undo2, Eraser, Minus, Plus, Play, Pause, X, SlidersHorizontal, LoaderCircle, Check, Maximize, Type } from 'lucide-react';
 import { getAnnotations, saveAnnotations } from './db';
 import { downloadPdf } from './sync';
-import { validBpm, type Annotations, type Score, type Stroke, type TextNote, type Point } from './domain';
+import { validBpm, isFestivity, type Annotations, type Score, type Stroke, type TextNote, type Point } from './domain';
 import { nativeAndroid } from './native';
 import { TextNotes, NoteEditor } from './TextNotes';
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -186,7 +186,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
     const target = page + direction;
     if (mode === 'pages' && target >= 1 && target <= count) { setPage(target); scroll.current?.scrollTo(0, 0); return; }
     const song = direction === 1 ? next : previous;
-    if (!song) { if (direction === 1) notify('Fim dos hinos deste dia.'); return; }
+    if (!song) { if (direction === 1) notify(isFestivity(score) ? 'Fim das partituras desta festividade.' : 'Fim dos hinos deste dia.'); return; }
     changing.current = true;
     await saveQueue.current;
     if (dirty.current) { changing.current = false; notify('Salve as anotações antes de trocar de hino.'); return; }
@@ -204,7 +204,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   });
   const pageWidth = (mode === 'pages' ? Math.min(dimensions.width, dimensions.height / ratio) : dimensions.width) * zoom / 100;
   return <div className={`reader immersive ${controls ? '' : 'controls-hidden'}`}>
-    <header className="reader-header"><button className="icon-button back" aria-label="Voltar ao repertório" onClick={() => void close()}><ArrowLeft /></button><div className="reader-title"><h1>{score.title}</h1><p>{score.group}{score.demo ? ' · Exemplo' : ''}</p></div><span className="reader-offline"><Check size={14} />{pdf ? 'No aparelho' : 'Carregando'}</span>{!nativeAndroid && document.fullscreenEnabled && <button className="icon-button" aria-label="Alternar tela cheia" onClick={() => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => notify('Tela cheia indisponível neste navegador.'))}><Maximize size={19} /></button>}<button className={`icon-button ${metro ? 'selected' : ''}`} aria-label="Abrir metrônomo" onClick={() => setMetro(!metro)}><SlidersHorizontal /></button></header>
+    <header className="reader-header"><button className="icon-button back" aria-label="Voltar ao repertório" onClick={() => void close()}><ArrowLeft /></button><div className="reader-title"><h1>{score.title}</h1><p>{score.group}{isFestivity(score) ? ' · Festividade' : ''}{score.demo ? ' · Exemplo' : ''}</p></div><span className="reader-offline"><Check size={14} />{pdf ? 'No aparelho' : 'Carregando'}</span>{!nativeAndroid && document.fullscreenEnabled && <button className="icon-button" aria-label="Alternar tela cheia" onClick={() => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => notify('Tela cheia indisponível neste navegador.'))}><Maximize size={19} /></button>}<button className={`icon-button ${metro ? 'selected' : ''}`} aria-label="Abrir metrônomo" onClick={() => setMetro(!metro)}><SlidersHorizontal /></button></header>
     <div className="reader-tools">
       <div className="segmented"><button className={mode === 'pages' ? 'active' : ''} onClick={() => setMode('pages')}><Columns2 size={16} />Por página</button><button className={mode === 'cascade' ? 'active' : ''} onClick={() => setMode('cascade')}><Rows3 size={16} />Contínua</button></div>
       <div className="pen-tools"><button className={`button small ${pen ? 'primary' : 'ghost'}`} onClick={() => { setPen(!pen); setTextTool(false); }} aria-pressed={pen}><PenLine size={16} />Caneta</button>{pen && <>

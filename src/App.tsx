@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PDFDocument } from 'pdf-lib';
-import { Music2, CalendarDays, BookOpen, Users, Settings2, Plus, Search, ChevronDown, ChevronRight, ArrowUpRight, FileMusic, CloudDownload, Check, WifiOff, X, UploadCloud, Smartphone, Tablet, ShieldCheck, Copy, LogOut, LoaderCircle, RefreshCw, Trash2, Info, Heart, Sparkles, Download } from 'lucide-react';
-import { GROUPS, MAX_PDF_BYTES, formatDate, sortScores, validBpm, weekKey, weekendDate, type Day, type Group, type Room, type Score } from './domain';
+import { Music2, CalendarDays, BookOpen, Users, Settings2, Plus, Search, ChevronDown, ChevronRight, ArrowUpRight, FileMusic, CloudDownload, Check, WifiOff, X, UploadCloud, Smartphone, Tablet, ShieldCheck, Copy, LogOut, LoaderCircle, RefreshCw, Trash2, Info, Heart, Sparkles, Download, PartyPopper } from 'lucide-react';
+import { GROUPS, MAX_PDF_BYTES, formatDate, sortScores, validBpm, weekKey, weekendDate, isActiveScore, isFestivity, type ScoreScope, type Day, type Group, type Room, type Score } from './domain';
 import { clearExpired, getPdf, getScores, removeScore, saveScore } from './db';
 import { cloud, deleteScore, downloadPdf, getRoom, joinRoom, loginDirector, publishScore, pullScores, ROOM_CACHE_KEY, listDirectors, grantDirector, removeDirector, type Director } from './sync';
 import { loadDemo } from './demo';
 import Reader from './Reader';
+import Festivities from './Festivities';
 import { hasAppUpdate, updateApp, appVersion } from './pwa';
 import { nativeAndroid, readerDisplay } from './native';
 
-type View = 'week' | 'library' | 'band' | 'settings';
+type View = 'week' | 'library' | 'festivity' | 'band' | 'settings';
 type Modal = 'upload' | 'connect' | null;
-const navigation = [ { id: 'week' as View, title: 'Repertório', icon: CalendarDays }, { id: 'library' as View, title: 'Partituras', icon: BookOpen }, { id: 'band' as View, title: 'Nossa banda', icon: Users }, { id: 'settings' as View, title: 'Ajustes', icon: Settings2 } ];
+const navigation = [ { id: 'week' as View, title: 'Repertório', icon: CalendarDays }, { id: 'festivity' as View, title: 'Festividade', icon: PartyPopper }, { id: 'library' as View, title: 'Partituras', icon: BookOpen }, { id: 'band' as View, title: 'Nossa banda', icon: Users }, { id: 'settings' as View, title: 'Ajustes', icon: Settings2 } ];
 const groupClass = (group: Group) => `group-${GROUPS.indexOf(group)}`;
 
 function ModalFrame({ title, description, onClose, children }: React.PropsWithChildren<{ title: string; description: string; onClose: () => void }>) {
@@ -80,9 +81,9 @@ function Directors({ notify }: { notify: (message: string) => void }) {
   </section>;
 }
 
-function Upload({ room, position, onClose, onSaved }: { room: Room | null; position: number; onClose: () => void; onSaved: () => void }) {
+function Upload({ room, position, scope = 'weekly', initialGroup = 'Grupo de louvor', onClose, onSaved }: { room: Room | null; position: number; scope?: ScoreScope; initialGroup?: Group; onClose: () => void; onSaved: (group: Group) => void }) {
   const [files, setFiles] = useState<File[]>([]), [title, setTitle] = useState('');
-  const [day, setDay] = useState<Day>('saturday'), [group, setGroup] = useState<Group>('Grupo de louvor'), [bpm, setBpm] = useState(80);
+  const [day, setDay] = useState<Day>('saturday'), [group, setGroup] = useState<Group>(initialGroup), [bpm, setBpm] = useState(80);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [progress, setProgress] = useState('');
   function choose(list: FileList | null) { const chosen = Array.from(list ?? []); setFiles(chosen); setTitle(chosen.length === 1 ? chosen[0].name.replace(/\.pdf$/i, '') : ''); setError(''); }
   async function submit(event: React.FormEvent) {
@@ -100,19 +101,19 @@ function Upload({ room, position, onClose, onSaved }: { room: Room | null; posit
       }
       for (const [i, { file, pages }] of documents.entries()) {
         setProgress(`Enviando ${i + 1} de ${files.length}…`);
-        const score: Score = { id: crypto.randomUUID(), title: (files.length === 1 ? title.trim() : file.name.replace(/\.pdf$/i, '')).slice(0,120), day, group, bpm: validBpm(bpm), week: weekKey(), pages, position: position + i, filename: file.name };
+        const score: Score = { id: crypto.randomUUID(), title: (files.length === 1 ? title.trim() : file.name.replace(/\.pdf$/i, '')).slice(0,120), day, group, scope, bpm: validBpm(bpm), week: scope === 'festivity' ? null : weekKey(), pages, position: position + i, filename: file.name };
         if (!score.title) throw new Error('Informe o nome do hino.');
         if (room) await publishScore(score, file, room); else await saveScore(score, file);
         completed++;
       }
-      onSaved();
+      onSaved(group);
     } catch (e) { setFiles(files.slice(completed)); setError(`${e instanceof Error ? e.message : 'Não foi possível enviar.'}${completed ? ` ${completed} PDF(s) já foram enviados; tente novamente os restantes.` : ''}`); }
     finally { setBusy(false); setProgress(''); }
   }
-  return <ModalFrame title={room ? 'Enviar partituras' : 'Adicionar partituras'} description={room ? 'Os tablets conectados receberão os PDFs automaticamente.' : 'Salve PDFs neste aparelho. Conecte a banda para distribuir aos tablets.'} onClose={() => { if (!busy) onClose(); }}>
+  return <ModalFrame title={scope === 'festivity' ? 'Partituras da festividade' : room ? 'Enviar partituras' : 'Adicionar partituras'} description={scope === 'festivity' ? 'Escolha o grupo. Os PDFs permanecem disponíveis até a exclusão manual.' : room ? 'Os tablets conectados receberão os PDFs automaticamente.' : 'Salve PDFs neste aparelho. Conecte a banda para distribuir aos tablets.'} onClose={() => { if (!busy) onClose(); }}>
     <form onSubmit={submit}><label className="dropzone" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); choose(e.dataTransfer.files); }}><UploadCloud size={30} /><strong>{files.length ? `${files.length} PDF${files.length > 1 ? 's selecionados' : ' selecionado'}` : 'Escolha suas partituras'}</strong><span>{files.length ? files.map(f => f.name).join(', ') : 'Toque para selecionar ou arraste os PDFs aqui'}</span><small>PDF · Até 20 MB por arquivo</small><input aria-label="Selecionar PDFs" type="file" accept="application/pdf,.pdf" multiple onChange={e => choose(e.target.files)} disabled={busy} /></label>
     {files.length === 1 && <label>Nome do hino<input value={title} onChange={e => setTitle(e.target.value)} required maxLength={120} /></label>}
-    <div className="form-row"><label>Dia<select aria-label="Dia" value={day} onChange={e => setDay(e.target.value as Day)}><option value="saturday">Sábado</option><option value="sunday">Domingo</option></select></label><label>Grupo<select aria-label="Grupo" value={group} onChange={e => setGroup(e.target.value as Group)}>{GROUPS.map(g => <option key={g}>{g}</option>)}</select></label></div>
+    <div className="form-row">{scope === 'weekly' && <label>Dia<select aria-label="Dia" value={day} onChange={e => setDay(e.target.value as Day)}><option value="saturday">Sábado</option><option value="sunday">Domingo</option></select></label>}<label>Grupo<select aria-label="Grupo" value={group} onChange={e => setGroup(e.target.value as Group)}>{GROUPS.map(g => <option key={g}>{g}</option>)}</select></label></div>
     <label>Andamento inicial (BPM)<input type="number" min="30" max="240" value={bpm} onChange={e => setBpm(Number(e.target.value))} required /></label>
     {error && <p className="form-error" role="alert">{error}</p>}<button type="submit" className="button primary full" disabled={!files.length || busy}>{busy ? <LoaderCircle size={18} className="spin" /> : <UploadCloud size={18} />}{progress || (room ? 'Enviar para a banda' : 'Salvar neste aparelho')}</button>
     </form>
@@ -120,7 +121,22 @@ function Upload({ room, position, onClose, onSaved }: { room: Room | null; posit
 }
 
 function ScoreRow({ score, cached, onOpen, canEdit, onDelete }: { score: Score; cached: boolean; onOpen: () => void; canEdit: boolean; onDelete: () => void }) {
-  return <div className="score-row"><button className="score-open" onClick={onOpen}><span className={`score-icon ${groupClass(score.group)}`}><FileMusic size={22} /></span><span className="score-info"><strong>{score.title}</strong><span><i className={`group-dot ${groupClass(score.group)}`} />{score.group}<b>·</b>{score.pages} páginas{score.demo && <b className="example-tag">Exemplo</b>}</span></span><span className="score-tempo">{score.bpm}<small>BPM</small></span><span className="score-cache" title={cached ? 'PDF salvo neste aparelho' : 'O PDF será baixado ao abrir'}>{cached ? <Check size={16} /> : <CloudDownload size={17} />}</span><ChevronRight size={19} className="score-arrow" /></button>{canEdit && <button className="icon-button delete-score" aria-label={`Remover ${score.title}`} onClick={onDelete}><Trash2 size={16} /></button>}</div>;
+  return <div className="score-row"><button className="score-open" onClick={onOpen}><span className={`score-icon ${groupClass(score.group)}`}><FileMusic size={22} /></span><span className="score-info"><strong>{score.title}</strong><span><i className={`group-dot ${groupClass(score.group)}`} />{score.group}<b>·</b>{score.pages} páginas{isFestivity(score) && <b className="festivity-tag">Festividade</b>}{score.demo && <b className="example-tag">Exemplo</b>}</span></span><span className="score-tempo">{score.bpm}<small>BPM</small></span><span className="score-cache" title={cached ? 'PDF salvo neste aparelho' : 'O PDF será baixado ao abrir'}>{cached ? <Check size={16} /> : <CloudDownload size={17} />}</span><ChevronRight size={19} className="score-arrow" /></button>{canEdit && <button className="icon-button delete-score" aria-label={`Remover ${score.title}`} onClick={onDelete}><Trash2 size={16} /></button>}</div>;
+}
+
+function RemoveFestivity({ score, onClose, onRemoved }: { score: Score; onClose: () => void; onRemoved: () => void }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  async function remove() {
+    setBusy(true); setError('');
+    try { await deleteScore(score); onRemoved(); }
+    catch { setError('Não foi possível concluir a exclusão. Verifique a conexão e tente novamente.'); }
+    finally { setBusy(false); }
+  }
+  return <ModalFrame title="Remover da festividade" description={`${score.title} será removida${score.roomId ? ' dos aparelhos conectados à banda' : ' deste aparelho'}.`} onClose={() => { if (!busy) onClose(); }}>
+    <p className="removal-note">As anotações dessa partitura também serão removidas.</p>
+    {error && <p className="form-error" role="alert">{error}</p>}
+    <div className="connection-actions"><button className="button ghost" disabled={busy} onClick={onClose}>Cancelar</button><button className="button primary" disabled={busy} onClick={() => void remove()}>{busy && <LoaderCircle className="spin" size={16} />}Remover partitura</button></div>
+  </ModalFrame>;
 }
 
 export default function App() {
@@ -133,6 +149,7 @@ export default function App() {
     } catch { return null; }
   }), [week, setWeek] = useState(weekKey());
   const [filter, setFilter] = useState<Group | 'all'>('all'), [query, setQuery] = useState(''), [expanded, setExpanded] = useState<Set<Day>>(new Set(['saturday']));
+  const [festivityGroup, setFestivityGroup] = useState<Group>('Grupo de louvor'), [deletingFestivity, setDeletingFestivity] = useState<Score | null>(null);
   const [cached, setCached] = useState<Set<string>>(new Set()), [syncing, setSyncing] = useState(false), [synced, setSynced] = useState(false), [online, setOnline] = useState(navigator.onLine), [toast, setToast] = useState('');
   const [loading, setLoading] = useState(true), [demoBusy, setDemoBusy] = useState(false);
   const [appUpdate, setAppUpdate] = useState(hasAppUpdate);
@@ -146,7 +163,7 @@ export default function App() {
   const syncLock = useRef(false), roomRef = useRef<Room | null>(null), toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const notify = useCallback((message: string) => { setToast(message); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(''), 6000); }, []);
   const reload = useCallback(async () => {
-    const all = await getScores(); setScores(sortScores(all.filter(s => s.week === weekKey())));
+    const all = await getScores(); setScores(sortScores(all.filter(s => isActiveScore(s, weekKey()))));
     const flags = await Promise.all(all.map(async s => await getPdf(s.id) ? s.id : null));
     setCached(new Set(flags.filter((id): id is string => !!id)));
   }, []);
@@ -190,7 +207,7 @@ export default function App() {
   useEffect(() => {
     const checkWeek = () => {
       const current = weekKey();
-      if (current !== week) { setWeek(current); setReader(null); void clearExpired(current).then(reload).catch(() => notify('Não foi possível limpar os arquivos antigos neste aparelho.')); notify('Repertório da semana anterior removido.'); }
+      if (current !== week) { setWeek(current); setReader(active => active && isFestivity(active) ? active : null); void clearExpired(current).then(reload).catch(() => notify('Não foi possível limpar os arquivos antigos neste aparelho.')); notify('Repertório da semana anterior removido.'); }
       if (navigator.onLine) void synchronize(true);
     };
     const connectivity = () => { setOnline(navigator.onLine); if (navigator.onLine) checkWeek(); };
@@ -199,12 +216,14 @@ export default function App() {
     window.addEventListener('online', connectivity); window.addEventListener('offline', connectivity); document.addEventListener('visibilitychange', visibility);
     return () => { clearInterval(timer); window.removeEventListener('online', connectivity); window.removeEventListener('offline', connectivity); document.removeEventListener('visibilitychange', visibility); clearTimeout(toastTimer.current); };
   }, [week, reload, notify, synchronize]);
-  const visibleScores = scores.filter(s => room ? s.roomId === room.id : !s.roomId);
-  const readingDay = reader ? visibleScores.filter(s => s.day === reader.day) : [];
+  const bandScores = scores.filter(s => room ? s.roomId === room.id : !s.roomId);
+  const visibleScores = view === 'week' ? bandScores.filter(s => !isFestivity(s)) : bandScores;
+  const readingDay = reader ? bandScores.filter(s => isFestivity(reader) ? isFestivity(s) && s.group === reader.group : !isFestivity(s) && s.day === reader.day) : [];
   const readingIndex = readingDay.findIndex(s => s.id === reader?.id);
   const filtered = visibleScores.filter(s => (filter === 'all' || s.group === filter) && `${s.title} ${s.group}`.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR')));
   const demo = visibleScores.some(s => s.demo), canEdit = !room || room.role === 'director';
   async function remove(score: Score) { try { await deleteScore(score); await reload(); notify('Partitura removida do repertório.'); } catch { notify('Não foi possível remover a partitura. Tente novamente.'); } }
+  function requestRemove(score: Score) { if (isFestivity(score)) setDeletingFestivity(score); else void remove(score); }
   async function startDemo() { setDemoBusy(true); try { await loadDemo(); await reload(); setExpanded(new Set(['saturday', 'sunday'])); notify('Exemplos carregados. Abra um PDF para experimentar o leitor.'); } catch { notify('Não foi possível carregar os exemplos.'); } finally { setDemoBusy(false); } }
   async function endDemo() { for (const s of scores.filter(s => s.demo)) await removeScore(s.id); await reload(); }
   async function disconnect() {
@@ -235,25 +254,27 @@ export default function App() {
           <div className="group-filters" aria-label="Filtrar por grupo"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>Todos os grupos<span>{visibleScores.length}</span></button>{GROUPS.map(group => <button key={group} className={filter === group ? 'active' : ''} onClick={() => setFilter(group)}><i className={`group-dot ${groupClass(group)}`} />{group}</button>)}</div>
           {loading ? <div className="empty-state"><LoaderCircle className="spin" /><p>Carregando repertório…</p></div> : view === 'week' ? <div className="day-cards">{(['saturday', 'sunday'] as Day[]).map(day => {
             const all = visibleScores.filter(s => s.day === day), list = filtered.filter(s => s.day === day), open = expanded.has(day), date = weekendDate(week, day);
-            return <section className={`day-card ${open ? 'expanded' : ''}`} key={day}><button className="day-toggle" aria-expanded={open} onClick={() => setExpanded(previous => { const next = new Set(previous); if (next.has(day)) next.delete(day); else next.add(day); return next; })}><span className={`date-square ${day}`}><small>{formatDate(date, { month: 'short' }).replace('.', '')}</small><strong>{formatDate(date, { day: '2-digit' })}</strong></span><span className="day-info"><strong>{day === 'saturday' ? 'Sábado' : 'Domingo'}</strong><span>{formatDate(date, { day: '2-digit', month: 'long' })}</span></span><span className="count-pill">{all.length} {all.length === 1 ? 'hino' : 'hinos'}</span><ChevronDown className="day-chevron" size={20} /></button>{open && <div className="day-content">{list.length ? list.map(score => <ScoreRow key={score.id} score={score} cached={cached.has(score.id)} canEdit={canEdit} onOpen={() => setReader(score)} onDelete={() => void remove(score)} />) : <div className="day-empty"><FileMusic size={25} /><div><strong>{all.length ? 'Nenhum hino neste filtro' : 'Nenhum hino adicionado'}</strong><p>{all.length ? 'Experimente outro grupo ou uma nova busca.' : canEdit ? 'Adicione as partituras deste dia.' : 'Os hinos aparecerão aqui quando o responsável enviar.'}</p></div>{canEdit && !all.length && <button className="icon-button" aria-label={`Adicionar hinos para ${day === 'saturday' ? 'sábado' : 'domingo'}`} onClick={() => setModal('upload')}><Plus size={20} /></button>}</div>}</div>}</section>;
-          })}</div> : <div className="library-list">{filtered.length ? filtered.map(score => <ScoreRow key={score.id} score={score} cached={cached.has(score.id)} canEdit={canEdit} onOpen={() => setReader(score)} onDelete={() => void remove(score)} />) : <div className="empty-state"><BookOpen size={30} /><h3>Nenhuma partitura por aqui</h3><p>Adicione PDFs ou conecte este aparelho à banda.</p></div>}</div>}
-          <div className="week-note"><RefreshCw size={16} /><p>Limpeza semanal.<span> O repertório é limpo na segunda-feira, à meia-noite.</span></p><span className="note-badge">Renova na segunda</span></div>
+            return <section className={`day-card ${open ? 'expanded' : ''}`} key={day}><button className="day-toggle" aria-expanded={open} onClick={() => setExpanded(previous => { const next = new Set(previous); if (next.has(day)) next.delete(day); else next.add(day); return next; })}><span className={`date-square ${day}`}><small>{formatDate(date, { month: 'short' }).replace('.', '')}</small><strong>{formatDate(date, { day: '2-digit' })}</strong></span><span className="day-info"><strong>{day === 'saturday' ? 'Sábado' : 'Domingo'}</strong><span>{formatDate(date, { day: '2-digit', month: 'long' })}</span></span><span className="count-pill">{all.length} {all.length === 1 ? 'hino' : 'hinos'}</span><ChevronDown className="day-chevron" size={20} /></button>{open && <div className="day-content">{list.length ? list.map(score => <ScoreRow key={score.id} score={score} cached={cached.has(score.id)} canEdit={canEdit} onOpen={() => setReader(score)} onDelete={() => requestRemove(score)} />) : <div className="day-empty"><FileMusic size={25} /><div><strong>{all.length ? 'Nenhum hino neste filtro' : 'Nenhum hino adicionado'}</strong><p>{all.length ? 'Experimente outro grupo ou uma nova busca.' : canEdit ? 'Adicione as partituras deste dia.' : 'Os hinos aparecerão aqui quando o responsável enviar.'}</p></div>{canEdit && !all.length && <button className="icon-button" aria-label={`Adicionar hinos para ${day === 'saturday' ? 'sábado' : 'domingo'}`} onClick={() => setModal('upload')}><Plus size={20} /></button>}</div>}</div>}</section>;
+          })}</div> : <div className="library-list">{filtered.length ? filtered.map(score => <ScoreRow key={score.id} score={score} cached={cached.has(score.id)} canEdit={canEdit} onOpen={() => setReader(score)} onDelete={() => requestRemove(score)} />) : <div className="empty-state"><BookOpen size={30} /><h3>Nenhuma partitura por aqui</h3><p>Adicione PDFs ou conecte este aparelho à banda.</p></div>}</div>}
+          <div className="week-note"><RefreshCw size={16} /><p>Limpeza semanal.<span> O repertório semanal é limpo na segunda-feira, à meia-noite. Festividades são removidas manualmente.</span></p><span className="note-badge">Renova na segunda</span></div>
           {!visibleScores.length && !room && <div className="explore-note"><span>Leitor PDF</span><button className="text-button" onClick={() => void startDemo()} disabled={demoBusy}>{demoBusy ? <LoaderCircle className="spin" size={15} /> : <Sparkles size={15} />}Explorar com exemplos<ArrowUpRight size={15} /></button></div>}
-        </> : view === 'band' ? <>
+        </> : view === 'festivity' ? <Festivities scores={bandScores.filter(isFestivity)} group={festivityGroup} onGroup={setFestivityGroup} canEdit={canEdit} connected={!!room} onUpload={() => setModal('upload')}
+          renderScore={score => <ScoreRow key={score.id} score={score} cached={cached.has(score.id)} canEdit={canEdit} onOpen={() => setReader(score)} onDelete={() => requestRemove(score)} />} /> : view === 'band' ? <>
           <div className="page-heading"><div><div className="eyebrow">BANDA SHALOM</div><h1>Banda</h1><p>Acessos e sincronização.</p></div></div>
           <section className="connection-card"><div className="connection-illustration"><Smartphone size={36} /><span>···</span><Tablet size={53} /></div><h2>{room ? room.name : 'Conecte-se à Shalom'}</h2><p>{room ? room.role === 'director' ? 'Compartilhe o código abaixo com os músicos. Envie os PDFs pela tela de repertório.' : 'Você recebe os hinos enviados pelo responsável. As suas anotações são só suas.' : 'Conecte este aparelho para receber as partituras.'}</p>{room ? <><div className="room-code"><span>{room.code}</span><button className="icon-button" aria-label="Copiar código" onClick={() => { void navigator.clipboard.writeText(room.code).then(() => notify('Código copiado.')).catch(() => notify(`Código da banda: ${room.code}`)); }}><Copy size={20} /></button></div><div className="connection-actions"><button className="button primary" disabled={syncing || !online} onClick={() => void synchronize()}><RefreshCw size={17} className={syncing ? 'spin' : ''} />Atualizar repertório</button><button className="button ghost" onClick={() => void disconnect()}><LogOut size={17} />Desconectar</button></div></> : <button className="button primary" onClick={() => setModal('connect')}><Users size={18} />Conectar à banda</button>}</section>
           {room?.role === 'director' && <Directors notify={notify} />}
           <div className="features-grid"><div><CloudDownload /><h3>Receba automaticamente</h3><p>Novos hinos aparecem nos aparelhos conectados à mesma banda.</p></div><div><ShieldCheck /><h3>Leitura offline</h3><p>Após o download, o PDF permanece disponível mesmo sem internet.</p></div><div><PenLineIcon /><h3>Anotações individuais</h3><p>Marque entradas, dinâmica e lembretes sem alterar o PDF da banda.</p></div></div>
         </> : <>
           <div className="page-heading"><div><div className="eyebrow">SHALOM</div><h1>Ajustes</h1><p>Downloads e instalação.</p></div></div>
-          <section className="settings-card"><h2>No seu aparelho</h2><div className="setting-row"><span className="setting-icon"><Download /></span><div><strong>Partituras salvas</strong><p>{visibleScores.filter(s => cached.has(s.id)).length} de {visibleScores.length} PDFs disponíveis para leitura sem internet.</p></div>{room && <button className="button small ghost" disabled={syncing} onClick={() => void synchronize()}>{syncing ? 'Baixando…' : 'Baixar todos'}</button>}</div><div className="setting-row"><span className="setting-icon"><CalendarDays /></span><div><strong>Renovação automática</strong><p>Segunda-feira, à meia-noite · horário de São Paulo.</p></div><span className="setting-value">Ativada<Check size={15} /></span></div><div className="setting-row"><span className="setting-icon"><Tablet /></span><div><strong>Instalar no iPad</strong><p>No Safari, abra o endereço do app, toque em Compartilhar e em “Adicionar à Tela de Início”. A instalação e o modo offline precisam de um endereço HTTPS.</p></div></div><div className="setting-row"><span className="setting-icon"><Smartphone /></span><div><strong>Instalar no Android</strong><p>Instale o APK da banda ou adicione o app à tela inicial pelo Chrome.</p></div></div></section>
+          <section className="settings-card"><h2>No seu aparelho</h2><div className="setting-row"><span className="setting-icon"><Download /></span><div><strong>Partituras salvas</strong><p>{visibleScores.filter(s => cached.has(s.id)).length} de {visibleScores.length} PDFs disponíveis para leitura sem internet.</p></div>{room && <button className="button small ghost" disabled={syncing} onClick={() => void synchronize()}>{syncing ? 'Baixando…' : 'Baixar todos'}</button>}</div><div className="setting-row"><span className="setting-icon"><CalendarDays /></span><div><strong>Renovação automática</strong><p>Somente o repertório semanal · segunda-feira, à meia-noite de São Paulo.</p></div><span className="setting-value">Ativada<Check size={15} /></span></div><div className="setting-row"><span className="setting-icon"><Tablet /></span><div><strong>Instalar no iPad</strong><p>No Safari, abra o endereço do app, toque em Compartilhar e em “Adicionar à Tela de Início”. A instalação e o modo offline precisam de um endereço HTTPS.</p></div></div><div className="setting-row"><span className="setting-icon"><Smartphone /></span><div><strong>Instalar no Android</strong><p>Instale o APK da banda ou adicione o app à tela inicial pelo Chrome.</p></div></div></section>
           <section className="settings-card"><h2>Sobre o Shalom</h2><p className="about-copy">Repertório semanal, leitor PDF, anotações individuais e metrônomo visual.</p><div className="about-footer"><span className="brand-mark"><Music2 /></span><span>Shalom<small>Versão {appVersion}</small></span></div></section>
         </>}
         <footer className="main-footer"><span>Banda Shalom</span><span>shalom <Music2 size={13} /></span></footer>
       </main></div><nav className="mobile-nav" aria-label="Navegação principal">{navigation.map(({ id, title, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => setView(id)}><Icon size={21} /><span>{id === 'band' ? 'Banda' : title}</span></button>)}</nav>
     </div>}
     {modal === 'connect' && <Connect onClose={() => setModal(null)} onConnected={connected => { setRoom(connected); setModal(null); setView('band'); notify('Aparelho conectado à banda.'); }} />}
-    {modal === 'upload' && <Upload room={room} position={Math.max(0, ...visibleScores.map(s => s.position + 1))} onClose={() => setModal(null)} onSaved={() => { setModal(null); setExpanded(new Set(['saturday', 'sunday'])); void reload(); notify(room ? 'Partituras enviadas para a banda.' : 'Partituras salvas neste aparelho.'); }} />}
+    {modal === 'upload' && <Upload room={room} scope={view === 'festivity' ? 'festivity' : 'weekly'} initialGroup={view === 'festivity' ? festivityGroup : 'Grupo de louvor'} position={Math.max(0, ...bandScores.map(s => s.position + 1))} onClose={() => setModal(null)} onSaved={group => { setModal(null); if (view === 'festivity') setFestivityGroup(group); setExpanded(new Set(['saturday', 'sunday'])); void reload(); notify(room ? 'Partituras enviadas para a banda.' : 'Partituras salvas neste aparelho.'); }} />}
+    {deletingFestivity && <RemoveFestivity score={deletingFestivity} onClose={() => setDeletingFestivity(null)} onRemoved={() => { setDeletingFestivity(null); void reload(); notify('Partitura removida da festividade.'); }} />}
     {toast && <div className="toast" role="status"><Info size={18} /><span>{toast}</span><button className="icon-button" aria-label="Fechar aviso" onClick={() => setToast('')}><X size={16} /></button></div>}
   </>;
 }

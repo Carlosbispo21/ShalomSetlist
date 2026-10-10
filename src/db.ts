@@ -1,5 +1,5 @@
 import { openDB } from 'idb';
-import type { Annotations, Score } from './domain';
+import { isExpiredScore, type Annotations, type Score } from './domain';
 const database = openDB('shalom-v1', 1, { upgrade(db) {
   db.createObjectStore('scores', { keyPath: 'id' });
   db.createObjectStore('pdfs'); db.createObjectStore('annotations');
@@ -22,5 +22,5 @@ export async function removeScore(id: string) {
   await tx.done;
 }
 export async function clearExpired(week: string) {
-  for (const score of await getScores()) if (score.week < week) await removeScore(score.id);
+  for (const score of await getScores()) if (isExpiredScore(score, week)) await removeScore(score.id);
 }

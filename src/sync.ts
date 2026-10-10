@@ -1,13 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { getPdf, getScores, removeScore, savePdf, saveScore } from './db';
-import { type Room, type Score, weekKey } from './domain';
+import { type Room, type Score, weekKey, isActiveScore, isFestivity, scoreFolder } from './domain';
 import { describeUploadError, isConnectionError } from './uploadErrors';
 const url = import.meta.env.VITE_SUPABASE_URL, key = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const cloud = url && key ? createClient(url, key) : null;
 export const ROOM_CACHE_KEY = `shalom-room:${url ?? 'local'}`;
 export function requireCloud() { if (!cloud) throw new Error('Configure o Supabase para conectar os aparelhos. Veja o README do projeto.'); return cloud; }
 function fromRow(row: Record<string, unknown>): Score {
-  return { id: String(row.id), title: String(row.title), group: row.group_name as Score['group'], day: row.day as Score['day'], week: String(row.week), bpm: Number(row.bpm), pages: Number(row.pages), position: Number(row.position), filename: String(row.filename), roomId: String(row.room_id), storagePath: String(row.storage_path) };
+  return { id: String(row.id), title: String(row.title), group: row.group_name as Score['group'], day: row.day as Score['day'], week: row.week == null ? null : String(row.week), scope: row.scope === 'festivity' ? 'festivity' : 'weekly', bpm: Number(row.bpm), pages: Number(row.pages), position: Number(row.position), filename: String(row.filename), roomId: String(row.room_id), storagePath: String(row.storage_path) };
 }
 export async function getRoom(): Promise<Room | null> {
   const client = requireCloud();
@@ -56,11 +56,11 @@ export async function removeDirector(userId: string) {
   if (error) throw error;
 }
 export async function pullScores(room: Room) {
-  const { data, error } = await requireCloud().from('scores').select('*').eq('room_id', room.id).eq('week', weekKey()).order('position');
+  const { data, error } = await requireCloud().from('scores').select('*').eq('room_id', room.id).or(`week.eq.${weekKey()},scope.eq.festivity`).order('position');
   if (error) throw error;
   const scores = (data ?? []).map(fromRow);
   const ids = new Set(scores.map(s => s.id));
-  for (const local of await getScores()) if (local.roomId === room.id && local.week === weekKey() && !ids.has(local.id)) await removeScore(local.id);
+  for (const local of await getScores()) if (local.roomId === room.id && isActiveScore(local, weekKey()) && !ids.has(local.id)) await removeScore(local.id);
   for (const score of scores) await saveScore(score);
   return scores;
 }
@@ -72,7 +72,7 @@ export async function downloadPdf(score: Score) {
   await savePdf(score.id, data); return data;
 }
 export async function publishScore(score: Score, file: Blob, room: Room) {
-  const client = requireCloud(), path = `${room.id}/${score.week}/${score.id}.pdf`;
+  const client = requireCloud(), path = `${room.id}/${scoreFolder(score)}/${score.id}.pdf`;
   // Materialize the PDF before fetch: Android picker files can be backed by a
   // temporary content URI which cannot be streamed reliably through FormData.
   let bytes: ArrayBuffer;
@@ -81,7 +81,7 @@ export async function publishScore(score: Score, file: Blob, room: Room) {
     const upload = await client.storage.from('scores').upload(path, bytes, { contentType: 'application/pdf', upsert: false });
     if (upload.error) throw upload.error;
   } catch (error) { throw describeUploadError('envio do PDF', error); }
-  const { error } = await client.from('scores').insert({ id: score.id, room_id: room.id, title: score.title, group_name: score.group, day: score.day, week: score.week, bpm: score.bpm, pages: score.pages, position: score.position, filename: score.filename, storage_path: path });
+  const { error } = await client.from('scores').insert({ id: score.id, room_id: room.id, title: score.title, group_name: score.group, day: score.day, week: score.week, scope: score.scope ?? 'weekly', bpm: score.bpm, pages: score.pages, position: score.position, filename: score.filename, storage_path: path });
   if (error) {
     if (isConnectionError(error)) {
       // A lost response does not imply a failed transaction. Confirm before
@@ -97,9 +97,15 @@ export async function publishScore(score: Score, file: Blob, room: Room) {
 }
 export async function deleteScore(score: Score) {
   if (score.roomId) {
+    // Festividades não entram no Cron: remova o PDF antes da linha para que uma
+    // falha de Storage mantenha a exclusão disponível para nova tentativa manual.
+    if (isFestivity(score) && score.storagePath) {
+      const removal = await requireCloud().storage.from('scores').remove([score.storagePath]);
+      if (removal.error) throw removal.error;
+    }
     const { error } = await requireCloud().from('scores').delete().eq('id', score.id); if (error) throw error;
     // Failed storage cleanup is retried by the scheduled cleanup function.
-    if (score.storagePath) await requireCloud().storage.from('scores').remove([score.storagePath]);
+    if (score.storagePath && !isFestivity(score)) await requireCloud().storage.from('scores').remove([score.storagePath]);
   }
   await removeScore(score.id);
 }
