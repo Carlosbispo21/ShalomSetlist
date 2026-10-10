@@ -1,7 +1,7 @@
 {
   "name": "shalom-setlist",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -17,6 +17,8 @@
   "dependencies": {
     "@capacitor/android": "^7.4.3",
     "@capacitor/core": "^7.4.3",
+    "@capacitor/filesystem": "^7.1.9",
+    "@capacitor/share": "^7.0.4",
     "@supabase/supabase-js": "^2.57.4",
     "idb": "^8.0.3",
     "lucide-react": "^0.468.0",

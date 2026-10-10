@@ -9,7 +9,7 @@ export default function Festivities({ scores, group, onGroup, canEdit, connected
   const selected = scores.filter(score => score.group === group);
   const filtered = selected.filter(score => score.title.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR')));
   return <>
-    <div className="page-heading"><div><div className="eyebrow">BANDA SHALOM</div><h1>Festividade</h1><p>Partituras mantidas até a exclusão manual.</p></div>{canEdit && <button className="button primary upload-main" onClick={onUpload}><Plus size={19} />{connected ? 'Enviar partituras' : 'Adicionar partituras'}</button>}</div>
+    <div className="page-heading"><div><h1>Festividade</h1><p>Partituras mantidas até a exclusão manual.</p></div>{canEdit && <button className="button primary upload-main" onClick={onUpload}><Plus size={19} />{connected ? 'Enviar partituras' : 'Adicionar partituras'}</button>}</div>
     <div className="festivity-groups" aria-label="Grupo da festividade">{GROUPS.map((name, index) => {
       const count = scores.filter(score => score.group === name).length;
       return <button className={group === name ? 'active' : ''} aria-pressed={group === name} key={name} onClick={() => { onGroup(name); setQuery(''); }}>

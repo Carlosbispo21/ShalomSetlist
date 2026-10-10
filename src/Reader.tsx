@@ -7,6 +7,8 @@ import { downloadPdf } from './sync';
 import { validBpm, isFestivity, type Annotations, type Score, type Stroke, type TextNote, type Point } from './domain';
 import { nativeAndroid } from './native';
 import { TextNotes, NoteEditor } from './TextNotes';
+import { Share2 } from 'lucide-react';
+import { pdfFilename, sharePdf, shareCancelled } from './sharing';
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 function PdfPage({ pdf, number, strokes, onChange, pen, color, zoom, notes, textTool, onCreateNote, onEditNote, onMoveNote }: {
@@ -111,6 +113,14 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   notify: (message: string) => void;
 }) {
   const [pdf, setPdf] = useState<pdfjs.PDFDocumentProxy | null>(null), [error, setError] = useState('');
+  const [sharedFile, setSharedFile] = useState<File | null>(null), [sharing, setSharing] = useState(false);
+  async function share() {
+    if (!sharedFile || sharing) return;
+    setSharing(true);
+    try { if (await sharePdf(sharedFile) === 'downloaded') notify('PDF baixado. Compartilhe o arquivo pela pasta de downloads.'); }
+    catch (error) { if (!shareCancelled(error)) notify('Não foi possível compartilhar o PDF. Tente novamente.'); }
+    finally { setSharing(false); }
+  }
   const [mode, setMode] = useState<'pages' | 'cascade'>(() => localStorage.getItem('shalom-reader-mode') === 'cascade' ? 'cascade' : 'pages');
   const [page, setPage] = useState(initialPage), [pen, setPen] = useState(false), [color, setColor] = useState('#5367de');
   const [textTool, setTextTool] = useState(false), [editing, setEditing] = useState<{ number: number; note: TextNote; isNew: boolean } | null>(null);
@@ -139,6 +149,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
         const loaded = await pdfjs.getDocument({ data: bytes, isEvalSupported: false }).promise;
         document = loaded;
         if (disposed) { await loaded.destroy(); return; }
+        setSharedFile(new File([blob],pdfFilename(score.filename || score.title),{type:'application/pdf'}));
         inkRef.current = ink; setAnnotations(ink); setPage(Math.min(initialPage, loaded.numPages)); setPdf(loaded);
       } catch { if (!disposed) setError('Não foi possível abrir o PDF. Conecte-se à internet e tente novamente.'); }
     };
@@ -204,7 +215,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   });
   const pageWidth = (mode === 'pages' ? Math.min(dimensions.width, dimensions.height / ratio) : dimensions.width) * zoom / 100;
   return <div className={`reader immersive ${controls ? '' : 'controls-hidden'}`}>
-    <header className="reader-header"><button className="icon-button back" aria-label="Voltar ao repertório" onClick={() => void close()}><ArrowLeft /></button><div className="reader-title"><h1>{score.title}</h1><p>{score.group}{isFestivity(score) ? ' · Festividade' : ''}{score.demo ? ' · Exemplo' : ''}</p></div><span className="reader-offline"><Check size={14} />{pdf ? 'No aparelho' : 'Carregando'}</span>{!nativeAndroid && document.fullscreenEnabled && <button className="icon-button" aria-label="Alternar tela cheia" onClick={() => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => notify('Tela cheia indisponível neste navegador.'))}><Maximize size={19} /></button>}<button className={`icon-button ${metro ? 'selected' : ''}`} aria-label="Abrir metrônomo" onClick={() => setMetro(!metro)}><SlidersHorizontal /></button></header>
+    <header className="reader-header"><button className="icon-button back" aria-label="Voltar ao repertório" onClick={() => void close()}><ArrowLeft /></button><div className="reader-title"><h1>{score.title}</h1><p>{score.group}{isFestivity(score) ? ' · Festividade' : ''}{score.demo ? ' · Exemplo' : ''}</p></div><span className="reader-offline"><Check size={14} />{pdf ? 'No aparelho' : 'Carregando'}</span><button className="icon-button" aria-label="Compartilhar PDF" title="Compartilhar PDF original, sem anotações" disabled={!sharedFile || sharing} onClick={() => void share()}>{sharing ? <LoaderCircle className="spin" size={19} /> : <Share2 size={19} />}</button>{!nativeAndroid && document.fullscreenEnabled && <button className="icon-button" aria-label="Alternar tela cheia" onClick={() => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => notify('Tela cheia indisponível neste navegador.'))}><Maximize size={19} /></button>}<button className={`icon-button ${metro ? 'selected' : ''}`} aria-label="Abrir metrônomo" onClick={() => setMetro(!metro)}><SlidersHorizontal /></button></header>
     <div className="reader-tools">
       <div className="segmented"><button className={mode === 'pages' ? 'active' : ''} onClick={() => setMode('pages')}><Columns2 size={16} />Por página</button><button className={mode === 'cascade' ? 'active' : ''} onClick={() => setMode('cascade')}><Rows3 size={16} />Contínua</button></div>
       <div className="pen-tools"><button className={`button small ${pen ? 'primary' : 'ghost'}`} onClick={() => { setPen(!pen); setTextTool(false); }} aria-pressed={pen}><PenLine size={16} />Caneta</button>{pen && <>

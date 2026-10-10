@@ -87,3 +87,17 @@ test('envia festividade para a pasta permanente com semana nula', async ({ page 
   expect(calls.rows[0]).toMatchObject({scope:'festivity',week:null,group_name:'Crianças'});
   expect(calls.rows[0].storage_path).toMatch(new RegExp(`^${roomId}/festivity/[^/]+\\.pdf$`));
 });
+
+test('compartilha convite da banda pelo menu do aparelho sem expor sessão',async({page})=>{
+  await page.addInitScript(()=>{
+    const win=window as typeof window & {invite?:ShareData};
+    Object.defineProperty(navigator,'share',{value:async(data:ShareData)=>{win.invite=data;},configurable:true});
+  });
+  await connectMockBand(page,false);
+  await page.getByRole('button',{name:/^(Nossa banda|Banda)$/}).click();
+  await page.getByRole('button',{name:'Compartilhar banda',exact:true}).click();
+  const data=await page.evaluate(()=>(window as unknown as {invite?:ShareData}).invite);
+  expect(data?.text).toContain('A1B2C3D4E5F6');
+  expect(data?.url).toMatch(/^https:\/\//);
+  expect(JSON.stringify(data)).not.toMatch(/test-refresh|test-signature|access_token|supabase/);
+});

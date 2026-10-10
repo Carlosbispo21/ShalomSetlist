@@ -2,7 +2,7 @@
 
 O Cloudflare Pages hospeda a interface do app. As contas, o repertório e os PDFs ficam no seu Supabase. Pelo GitHub, configure a URL e a chave **pública** nas variáveis de build do Cloudflare, conforme abaixo. Os APKs e o ZIP já compilados neste computador incluem essa configuração.
 
-Guia revisado para a versão **0.3.2**. Use o fluxo pelo GitHub para publicar a web automaticamente.
+Guia revisado para a versão **0.3.3**. Use o fluxo pelo GitHub para publicar a web automaticamente.
 
 ## Publicar pelo GitHub no Cloudflare Pages
 
@@ -96,3 +96,7 @@ A limpeza da tela/local e as regras de leitura já acompanham a semana. Para lib
 ## Festividade
 
 A versão 0.3.2 inclui partituras permanentes por grupo. Consulte [GUIA_FESTIVIDADE.md](GUIA_FESTIVIDADE.md). A migração já foi executada no seu Supabase; publicar a interface atualizada ativa a nova tela.
+
+## Compartilhamento
+
+Consulte [GUIA_COMPARTILHAMENTO.md](GUIA_COMPARTILHAMENTO.md) para compartilhar a banda e PDFs. A importação do Google Drive foi implementada no APK pelo seletor Android. O seletor próprio do Drive na web ficou para uma etapa futura.

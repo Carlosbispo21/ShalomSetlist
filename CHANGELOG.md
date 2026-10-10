@@ -1,5 +1,14 @@
 # Alterações
 
+## 0.3.3
+
+- Marca exibida no canto superior esquerdo, identificação da banda junto ao status e crédito Carlos Bispo no rodapé.
+
+- Menu de compartilhamento para o convite da banda e o PDF original no leitor.
+- Compartilhamento Android envia uma cópia privada do PDF sem tornar o Storage público.
+- Importação de PDFs do Google Drive no APK pelo seletor de documentos Android, sem Google Cloud.
+- Seleção de múltiplos PDFs com validação antes do envio e remoção das cópias temporárias.
+
 ## 0.3.2
 
 - Festividade com partituras permanentes separadas pelos seis grupos da banda.

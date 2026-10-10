@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
     boolean reading = false;
     @Override public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ReaderDisplayPlugin.class);
+        registerPlugin(ScoreFilesPlugin.class);
         super.onCreate(savedInstanceState);
         // Versões antigas tinham um service worker. Retira apenas o registro
         // dele, preservando login, PDFs e anotações, mesmo se ele servir HTML antigo.
