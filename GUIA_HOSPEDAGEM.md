@@ -1,6 +1,8 @@
 # Publicar o Shalom para Android e iPad
 
-O Cloudflare Pages hospeda a interface do app. As contas, o repertório e os PDFs ficam no seu Supabase. O pacote já contém a URL e a chave **pública** do Supabase; nenhuma chave administrativa é incluída.
+O Cloudflare Pages hospeda a interface do app. As contas, o repertório e os PDFs ficam no seu Supabase. Pelo GitHub, configure a URL e a chave **pública** nas variáveis de build do Cloudflare, conforme abaixo. Os APKs e o ZIP já compilados neste computador incluem essa configuração.
+
+Guia revisado para a versão **0.3.1**. Use o fluxo pelo GitHub para publicar a web automaticamente.
 
 ## Publicar pelo GitHub no Cloudflare Pages
 
@@ -24,6 +26,8 @@ O código está no repositório [Carlosbispo21/ShalomSetlist](https://github.com
 4. Clique em **Save and Deploy**. O Cloudflare mostrará a URL HTTPS `…pages.dev`.
 5. No Supabase → Authentication → URL Configuration, defina essa URL em **Site URL** e, se usar confirmação de e-mail, em **Redirect URLs**.
 6. No iPad, abra essa URL no Safari e use **Compartilhar → Adicionar à Tela de Início**.
+
+Para conectar à banda já criada, o responsável entra com o mesmo e-mail e senha usados no Android; os músicos usam o código da banda. A versão web atual inclui o leitor em tela cheia, a troca de hino no modo contínuo e a ferramenta **Cifras**, descrita em [GUIA_CIFRAS.md](GUIA_CIFRAS.md).
 
 Depois da conexão, cada `git push` na branch `main` publica a versão web automaticamente. Os aparelhos abertos verificam o service worker a cada minuto e ao retomar o app; mostram **Nova versão disponível** quando a publicação estiver pronta. O aviso aguarda a saída do leitor.
 
@@ -58,11 +62,13 @@ Todos os responsáveis podem enviar/remover hinos e gerenciar responsáveis. O c
 
 ## Atualizações
 
-Após alterar o app, execute `npm run build` e compacte o **conteúdo** de `dist` novamente. No mesmo projeto Pages, envie um novo deployment para o ambiente **Production**, mantendo o endereço.
+**Web com integração GitHub:** envie as alterações com `git push` para `main`. O Cloudflare compila e publica automaticamente no mesmo endereço. Não é necessário enviar ZIP nesse fluxo. Se alterar as variáveis de build, solicite um novo deployment para incorporar os novos valores.
+
+**Web por Direct Upload:** execute `npm run build`, compacte o **conteúdo** de `dist` e envie o novo ZIP como deployment **Production** no mesmo projeto Pages.
 
 Na versão web, o aviso **Nova versão disponível** permite aplicar uma atualização. A consulta acontece a cada minuto e ao retomar o app. O aviso fica no repertório; ele não interrompe a leitura de um PDF. Quando um aparelho estiver com uma versão antiga que ainda não tem esse aviso, feche todas as abas/instâncias do app e abra novamente.
 
-No Android, a partir da versão **0.3.0**, o app verifica `latest.json` na branch `main` do GitHub e mostra o mesmo aviso quando há um APK mais novo publicado em Releases. O botão abre o download; o Android pede confirmação de instalação. Instale por cima, com a mesma assinatura, para manter a banda e as anotações. Instale a 0.3.0 manualmente nos aparelhos antigos uma primeira vez para ativar esse recurso. Atualizar somente o site não substitui o APK.
+No Android, a partir da versão **0.3.0**, o app verifica `latest.json` na branch `main` do GitHub e mostra o mesmo aviso quando há um APK mais novo publicado em Releases. O botão abre o download; o Android pede confirmação de instalação. Instale por cima, com a mesma assinatura, para manter a banda e as anotações. Nos aparelhos anteriores à 0.3.0, instale o [APK mais recente](https://github.com/Carlosbispo21/ShalomSetlist/releases/latest) manualmente uma primeira vez para ativar esse recurso. Atualizar somente o site não substitui o APK.
 
 Antes de publicar, registre as mudanças na próxima versão de `CHANGELOG.md`. Para preparar e publicar a próxima versão no mesmo computador:
 

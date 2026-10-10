@@ -26,7 +26,7 @@ npm run dev
 
 Abra `http://localhost:5173`. Copie `.env.example` para `.env` e preencha a chave publicável do Supabase para conectar a banda. Sem `.env`, o app funciona no modo local.
 
-Veja `GUIA_HOSPEDAGEM.md` para a integração GitHub → Cloudflare Pages e `GUIA_DISPONIBILIDADE.md` para a checagem externa do Supabase. A versão 0.3.0 está descrita em `CHANGELOG.md`.
+Veja `GUIA_HOSPEDAGEM.md` para a integração GitHub → Cloudflare Pages e `GUIA_DISPONIBILIDADE.md` para a checagem externa do Supabase. Consulte `CHANGELOG.md` para as alterações de cada versão e `GUIA_CIFRAS.md` para usar as cifras.
 
 ```powershell
 npm test
@@ -54,7 +54,7 @@ Cada responsável usa e-mail/senha próprios. Uma conta entra na banda pelo cód
 
 Se o banco já existia antes da versão 0.2.0, execute **somente** `supabase/migrations/20261010_multiple_directors.sql` no SQL Editor. Para projeto novo, `supabase/schema.sql` já inclui essa atualização. Os testes em `tests/permissions.test.mjs` executam a migração em um PostgreSQL em memória e verificam upload, papéis, revogação e isolamento entre bandas.
 
-Leia `GUIA_HOSPEDAGEM.md` para publicar `artifacts/shalom-web.zip` no plano gratuito do Cloudflare Pages e instalar no iPad pelo Safari.
+Leia `GUIA_HOSPEDAGEM.md` para conectar o GitHub ao Cloudflare Pages e instalar no iPad pelo Safari. O envio de `artifacts/shalom-web.zip` também está explicado como alternativa.
 
 ### Correção de upload na versão 0.2.1
 
