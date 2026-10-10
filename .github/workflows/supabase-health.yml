@@ -1,0 +1,30 @@
+name: Disponibilidade do Supabase
+on:
+  schedule:
+    - cron: '23 2,8,14,20 * * *'
+  workflow_dispatch:
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Consultar banco sem alterar dados
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          node --input-type=module <<'JS'
+          const url = process.env.SUPABASE_URL;
+          const key = process.env.SUPABASE_PUBLISHABLE_KEY;
+          if (!url || !key) throw new Error('Configure as duas variables do repositório.');
+          const endpoint = new URL('/rest/v1/rpc/shalom_health', url);
+          if (endpoint.protocol !== 'https:') throw new Error('Use HTTPS.');
+          const r = await fetch(endpoint, { method: 'POST',
+            headers: { apikey: key, 'Content-Type': 'application/json' },
+            body: '{}', signal: AbortSignal.timeout(20000) });
+          if (!r.ok) throw new Error(`Supabase indisponível: HTTP ${r.status}`);
+          const data = await r.json();
+          if (data?.status !== 'ok') throw new Error('Resposta inesperada.');
+          console.log(`Banco disponível. Semana: ${data.week}`);
+          JS
