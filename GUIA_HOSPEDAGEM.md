@@ -100,3 +100,9 @@ A versão 0.3.2 inclui partituras permanentes por grupo. Consulte [GUIA_FESTIVID
 ## Compartilhamento
 
 Consulte [GUIA_COMPARTILHAMENTO.md](GUIA_COMPARTILHAMENTO.md) para compartilhar a banda e PDFs. A importação do Google Drive foi implementada no APK pelo seletor Android. O seletor próprio do Drive na web ficou para uma etapa futura.
+
+## Propagação do aviso Android
+
+O GitHub pode manter o manifesto de atualização anterior em cache por alguns minutos. O publicador agora aguarda o endereço consultado pelos APKs informar a versão nova antes de confirmar a publicação. Para conferir separadamente, execute `node scripts/verify-release-feed.mjs`.
+
+O APK verifica ao abrir, ao retomar e a cada minuto com a tela visível e internet. O aviso aparece fora do leitor de PDF. Se necessário, saia da partitura e aguarde um minuto na tela inicial. O arquivo APK também pode ser baixado diretamente na página Releases.

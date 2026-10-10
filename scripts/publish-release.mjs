@@ -2,6 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { verifyReleaseFeed } from './verify-release-feed.mjs';
 const repo = 'Carlosbispo21/ShalomSetlist';
 const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url)));
 const changelog = (await readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
@@ -48,4 +49,5 @@ try { current = await request(contentsUrl); } catch (error) { if (!error.message
 await request(contentsUrl, 'PUT', { message: `Disponibiliza atualização Shalom ${version}`,
   content: Buffer.from(JSON.stringify(manifest, null, 2) + '\n').toString('base64'), ...(current ? { sha: current.sha } : {}) });
 await writeFile(new URL('../artifacts/latest.json', import.meta.url), JSON.stringify(manifest, null, 2) + '\n');
+await verifyReleaseFeed(manifest,{onRetry:cached => console.log(`APK publicado. Aguardando cache do manifesto: ${cached ?? 'indisponível'} → ${version}.`)});
 console.log(`Atualização publicada: ${release.html_url}`);
