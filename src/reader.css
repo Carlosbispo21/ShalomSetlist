@@ -1,0 +1,32 @@
+/* A folha ocupa o visor; nenhum controle reserva espaço na leitura. */
+.reader.immersive{padding:0;display:block;background:#fff;isolation:isolate}
+.immersive .reader-scroll{position:absolute;inset:0;width:100%;height:100%;padding:0;overflow:auto;background:#fff;z-index:0}
+.immersive .reader-scroll.pages{touch-action:pan-y}
+.immersive .pages-container{min-width:0;min-height:100%;padding:0;margin:0;display:flex;flex-direction:column;justify-content:center}
+.immersive .cascade .pages-container{justify-content:flex-start}
+.immersive .pages-container>section{margin:0 auto;flex-shrink:0}
+.immersive .cascade .pages-container>section+section{border-top:5px solid #e9eded}
+.immersive .pdf-page{box-shadow:none;border-radius:0}
+.immersive .reader-header,.immersive .reader-tools,.immersive .reader-footer,.reader-controls-toggle{position:absolute;z-index:3;background:rgba(255,255,255,.76);backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);border:1px solid rgba(255,255,255,.85);box-shadow:0 3px 22px #17232618,inset 0 1px 0 #fff;transition:opacity .18s,transform .18s;}
+.immersive .reader-header{top:calc(12px + env(safe-area-inset-top));left:12px;right:12px;min-height:58px;border-radius:22px;padding:9px 12px;gap:12px}
+.immersive .reader-title h1{font-size:14px;color:#20282a}
+.immersive .reader-title p{margin-top:3px;color:#667174}
+.immersive .reader-tools{bottom:calc(77px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);border-radius:24px;padding:9px 12px;gap:12px;justify-content:center}
+.immersive .reader-tools .segmented{background:#26323809}
+.immersive .reader-tools .segmented button.active{color:#20282a;background:#fff}
+.immersive .reader-tools .zoom-tools{margin-left:0;color:#4f5b5e}
+.immersive .reader-tools .pen-colors button{border-color:#fff}
+.immersive .reader-footer{bottom:calc(16px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);min-height:44px;border-radius:24px;padding:4px 8px;width:max-content;max-width:calc(100% - 120px)}
+.immersive .page-navigation{font-size:12px;gap:10px;color:#20282a}
+.immersive .page-navigation .icon-button{width:40px;height:36px;color:#20282a}
+.reader-controls-toggle{bottom:calc(16px + env(safe-area-inset-bottom));left:16px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#20282a}
+.immersive .metronome{top:calc(84px + env(safe-area-inset-top));right:12px;z-index:4;background:#ffffffc9}
+.immersive .reader-error{position:absolute;inset:0;padding:30px}
+.immersive.controls-hidden .reader-header,.immersive.controls-hidden .reader-tools,.immersive.controls-hidden .reader-footer{opacity:0;visibility:hidden;pointer-events:none}
+.immersive.controls-hidden .reader-header{transform:translateY(-12px)}
+.immersive.controls-hidden .reader-tools,.immersive.controls-hidden .reader-footer{transform:translate(-50%,12px)}
+.immersive.controls-hidden .metronome{top:calc(12px + env(safe-area-inset-top));width:44px;height:44px;padding:0;border-radius:50%;display:grid;place-items:center}
+.immersive.controls-hidden .metronome .metro-top{justify-content:center;gap:0}
+.immersive.controls-hidden .metronome .metro-top>span:not(.beat-dot),.immersive.controls-hidden .metronome .metro-top>button,.immersive.controls-hidden .metronome .metro-value,.immersive.controls-hidden .metronome>input,.immersive.controls-hidden .metronome .metro-bottom{display:none}
+@media(max-width:650px){.immersive .reader-tools{gap:7px;padding:9px;flex-wrap:wrap;width:max-content;max-width:calc(100% - 24px)}.immersive .reader-tools .segmented button{font-size:10px;padding:8px}.immersive .pen-tools .button{font-size:11px;padding:9px}.immersive .zoom-tools .icon-button{width:31px}.immersive .reader-header{gap:8px}.immersive .reader-offline{display:none}.immersive .reader-tools .icon-button{width:32px;height:32px}.immersive .pen-tools{gap:4px}}
+@media(prefers-reduced-motion:reduce){.immersive .reader-header,.immersive .reader-tools,.immersive .reader-footer{transition:none}}
