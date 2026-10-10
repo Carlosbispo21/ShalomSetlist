@@ -7,6 +7,7 @@ Aplicativo para a banda da igreja: repertório semanal por sábado/domingo e por
 - Importa um ou vários PDFs, valida arquivos e permite definir grupo, dia e BPM.
 - Lê PDF em tela cheia com ferramentas flutuantes, por página (toque nas laterais, botões ou gesto) ou em rolagem contínua. A última página abre o próximo hino do mesmo dia. Zoom de 75% a 200%.
 - Caneta com três cores, desfazer e apagar os traços da página. As anotações ficam no aparelho e não alteram o PDF original.
+- Cifras e notas digitadas em qualquer ponto da folha, com fonte em pontos, cor, edição e movimentação. Toque nas laterais no modo contínuo para trocar de hino do mesmo dia.
 - Metrônomo visual de 30 a 240 BPM com bolinha no canto superior e indicação de quatro batidas. Sem som.
 - Salva PDFs em IndexedDB; após o download, a leitura funciona sem internet.
 - Mantém a tela acesa durante a leitura quando o aparelho oferece suporte.

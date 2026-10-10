@@ -1,21 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
-import { ArrowLeft, ChevronLeft, ChevronRight, Columns2, Rows3, PenLine, Undo2, Eraser, Minus, Plus, Play, Pause, X, SlidersHorizontal, LoaderCircle, Check, Maximize } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Columns2, Rows3, PenLine, Undo2, Eraser, Minus, Plus, Play, Pause, X, SlidersHorizontal, LoaderCircle, Check, Maximize, Type } from 'lucide-react';
 import { getAnnotations, saveAnnotations } from './db';
 import { downloadPdf } from './sync';
-import { validBpm, type Annotations, type Score, type Stroke } from './domain';
+import { validBpm, type Annotations, type Score, type Stroke, type TextNote, type Point } from './domain';
 import { nativeAndroid } from './native';
+import { TextNotes, NoteEditor } from './TextNotes';
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
-function PdfPage({ pdf, number, strokes, onChange, pen, color, zoom }: {
+function PdfPage({ pdf, number, strokes, onChange, pen, color, zoom, notes, textTool, onCreateNote, onEditNote, onMoveNote }: {
   pdf: pdfjs.PDFDocumentProxy; number: number; strokes: Stroke[];
   onChange: (strokes: Stroke[]) => void; pen: boolean; color: string; zoom: number;
+  notes: TextNote[]; textTool: boolean; onCreateNote: (position: Point) => void;
+  onEditNote: (note: TextNote) => void; onMoveNote: (note: TextNote) => void;
 }) {
   const wrapper = useRef<HTMLDivElement>(null), canvas = useRef<HTMLCanvasElement>(null);
   const [ratio, setRatio] = useState(1.414), [visible, setVisible] = useState(false), [ready, setReady] = useState(false);
   const [draft, setDraft] = useState<Stroke | null>(null);
   const draftRef = useRef<Stroke | null>(null);
+  const [originalWidth, setOriginalWidth] = useState(612);
   useEffect(() => {
     const observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) setVisible(true); }, { rootMargin: '500px' });
     if (wrapper.current) observer.observe(wrapper.current);
@@ -31,6 +35,7 @@ function PdfPage({ pdf, number, strokes, onChange, pen, color, zoom }: {
         const page = await pdf.getPage(number);
         if (disposed) return;
         const original = page.getViewport({ scale: 1 });
+        setOriginalWidth(original.width);
         setRatio(original.height / original.width);
         const scale = wrapper.current.clientWidth / original.width;
         const viewport = page.getViewport({ scale: scale * Math.min(devicePixelRatio || 1, 2) });
@@ -72,6 +77,8 @@ function PdfPage({ pdf, number, strokes, onChange, pen, color, zoom }: {
       }} onPointerUp={finish} onPointerCancel={() => { draftRef.current = null; setDraft(null); }}>
       {[...strokes, ...(draft ? [draft] : [])].map(stroke => <polyline key={stroke.id} points={stroke.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round" />)}
     </svg>
+    <TextNotes notes={notes} active={textTool && ready} ratio={ratio} pageWidth={originalWidth}
+      onCreate={onCreateNote} onEdit={onEditNote} onMove={onMoveNote} />
   </div>;
 }
 
@@ -106,6 +113,8 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   const [pdf, setPdf] = useState<pdfjs.PDFDocumentProxy | null>(null), [error, setError] = useState('');
   const [mode, setMode] = useState<'pages' | 'cascade'>(() => localStorage.getItem('shalom-reader-mode') === 'cascade' ? 'cascade' : 'pages');
   const [page, setPage] = useState(initialPage), [pen, setPen] = useState(false), [color, setColor] = useState('#5367de');
+  const [textTool, setTextTool] = useState(false), [editing, setEditing] = useState<{ number: number; note: TextNote; isNew: boolean } | null>(null);
+  const [noteSize, setNoteSize] = useState(16), [noteColor, setNoteColor] = useState('#20282a');
   const [controls, setControls] = useState(true), [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight }), [ratio, setRatio] = useState(1.414);
   const [annotations, setAnnotations] = useState<Annotations>({}), [zoom, setZoom] = useState(100), [metro, setMetro] = useState(false), [bpm, setBpm] = useState(score.bpm);
   const inkRef = useRef<Annotations>({}), saveQueue = useRef(Promise.resolve()), dirty = useRef(false);
@@ -145,10 +154,23 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   useEffect(() => { localStorage.setItem('shalom-reader-mode', mode); }, [mode]);
   function updateInk(number: number, strokes: Stroke[]) {
     const next = { ...inkRef.current, [number]: strokes };
+    persistAnnotations(next);
+  }
+  function persistAnnotations(next: Annotations) {
     inkRef.current = next; setAnnotations(next); dirty.current = true;
-    saveQueue.current = saveQueue.current.catch(() => {}).then(() => saveAnnotations(score.id, next)).then(() => { dirty.current = false; }).catch(() => { notify('Não foi possível salvar os rabiscos. Verifique o espaço do aparelho.'); dirty.current = true; });
+    saveQueue.current = saveQueue.current.catch(() => {}).then(() => saveAnnotations(score.id, next)).then(() => { dirty.current = false; }).catch(() => { notify('Não foi possível salvar as anotações. Verifique o espaço do aparelho.'); dirty.current = true; });
+  }
+  function updateNote(number: number, note: TextNote) {
+    const existing = inkRef.current.texts?.[number] ?? [];
+    persistAnnotations({ ...inkRef.current, texts: { ...inkRef.current.texts, [number]: existing.some(item => item.id === note.id)
+      ? existing.map(item => item.id === note.id ? note : item) : [...existing, note] } });
+  }
+  function deleteNote(number: number, id: string) {
+    persistAnnotations({ ...inkRef.current, texts: { ...inkRef.current.texts,
+      [number]: (inkRef.current.texts?.[number] ?? []).filter(note => note.id !== id) } });
   }
   async function close() {
+    if (editing) { setEditing(null); return; }
     await saveQueue.current;
     if (dirty.current) { notify('As últimas anotações ainda não foram salvas. Tente novamente antes de sair.'); return; }
     onClose();
@@ -160,21 +182,21 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   });
   const count = pdf?.numPages ?? score.pages;
   async function navigate(direction: -1 | 1) {
-    if (!pdf || changing.current) return;
+    if (!pdf || editing || changing.current) return;
     const target = page + direction;
-    if (target >= 1 && target <= count) { setPage(target); scroll.current?.scrollTo(0, 0); return; }
+    if (mode === 'pages' && target >= 1 && target <= count) { setPage(target); scroll.current?.scrollTo(0, 0); return; }
     const song = direction === 1 ? next : previous;
     if (!song) { if (direction === 1) notify('Fim dos hinos deste dia.'); return; }
     changing.current = true;
     await saveQueue.current;
     if (dirty.current) { changing.current = false; notify('Salve as anotações antes de trocar de hino.'); return; }
-    onSong(song, direction === -1);
+    onSong(song, mode === 'pages' && direction === -1);
   }
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if ((event.target as HTMLElement).matches('input, select, textarea')) return;
+      if (editing || (event.target as HTMLElement).matches('input, select, textarea')) return;
       if (event.key === 'Escape') { event.preventDefault(); void close(); }
-      else if (mode === 'pages' && !pen && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+      else if (!pen && !textTool && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
         event.preventDefault(); void navigate(event.key === 'ArrowRight' ? 1 : -1);
       }
     };
@@ -183,21 +205,31 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   const pageWidth = (mode === 'pages' ? Math.min(dimensions.width, dimensions.height / ratio) : dimensions.width) * zoom / 100;
   return <div className={`reader immersive ${controls ? '' : 'controls-hidden'}`}>
     <header className="reader-header"><button className="icon-button back" aria-label="Voltar ao repertório" onClick={() => void close()}><ArrowLeft /></button><div className="reader-title"><h1>{score.title}</h1><p>{score.group}{score.demo ? ' · Exemplo' : ''}</p></div><span className="reader-offline"><Check size={14} />{pdf ? 'No aparelho' : 'Carregando'}</span>{!nativeAndroid && document.fullscreenEnabled && <button className="icon-button" aria-label="Alternar tela cheia" onClick={() => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => notify('Tela cheia indisponível neste navegador.'))}><Maximize size={19} /></button>}<button className={`icon-button ${metro ? 'selected' : ''}`} aria-label="Abrir metrônomo" onClick={() => setMetro(!metro)}><SlidersHorizontal /></button></header>
-    <div className="reader-tools"><div className="segmented"><button className={mode === 'pages' ? 'active' : ''} onClick={() => setMode('pages')}><Columns2 size={16} />Por página</button><button className={mode === 'cascade' ? 'active' : ''} onClick={() => setMode('cascade')}><Rows3 size={16} />Contínua</button></div><div className="pen-tools"><button className={`button small ${pen ? 'primary' : 'ghost'}`} onClick={() => setPen(!pen)} aria-pressed={pen}><PenLine size={16} />Caneta</button>{pen && <><div className="pen-colors">{['#5367de', '#e36959', '#263247'].map(c => <button key={c} aria-label={`Cor ${c}`} style={{ background: c }} className={color === c ? 'active' : ''} onClick={() => setColor(c)} />)}</div><button className="icon-button" aria-label="Desfazer último traço" disabled={!annotations[page]?.length} onClick={() => updateInk(page, annotations[page].slice(0, -1))}><Undo2 size={17} /></button><button className="icon-button" aria-label="Apagar rabiscos desta página" disabled={!annotations[page]?.length} onClick={() => updateInk(page, [])}><Eraser size={17} /></button></>}</div><div className="zoom-tools"><button className="icon-button" aria-label="Diminuir zoom" disabled={zoom <= 75} onClick={() => setZoom(Math.max(75, zoom - 25))}><Minus size={16} /></button><span>{zoom}%</span><button className="icon-button" aria-label="Aumentar zoom" disabled={zoom >= 200} onClick={() => setZoom(Math.min(200, zoom + 25))}><Plus size={16} /></button></div></div>
+    <div className="reader-tools">
+      <div className="segmented"><button className={mode === 'pages' ? 'active' : ''} onClick={() => setMode('pages')}><Columns2 size={16} />Por página</button><button className={mode === 'cascade' ? 'active' : ''} onClick={() => setMode('cascade')}><Rows3 size={16} />Contínua</button></div>
+      <div className="pen-tools"><button className={`button small ${pen ? 'primary' : 'ghost'}`} onClick={() => { setPen(!pen); setTextTool(false); }} aria-pressed={pen}><PenLine size={16} />Caneta</button>{pen && <>
+        <div className="pen-colors">{['#5367de', '#e36959', '#263247'].map(c => <button key={c} aria-label={`Cor ${c}`} style={{ background: c }} className={color === c ? 'active' : ''} onClick={() => setColor(c)} />)}</div>
+        <button className="icon-button" aria-label="Desfazer último traço" disabled={!annotations[page]?.length} onClick={() => updateInk(page, annotations[page].slice(0, -1))}><Undo2 size={17} /></button>
+        <button className="icon-button" aria-label="Apagar rabiscos desta página" disabled={!annotations[page]?.length} onClick={() => updateInk(page, [])}><Eraser size={17} /></button>
+      </>}</div>
+      <button className={`button small text-tool ${textTool ? 'primary' : 'ghost'}`} aria-pressed={textTool} onClick={() => { setTextTool(!textTool); setPen(false); }}><Type size={16} />Cifras</button>
+      <div className="zoom-tools"><button className="icon-button" aria-label="Diminuir zoom" disabled={zoom <= 75} onClick={() => setZoom(Math.max(75, zoom - 25))}><Minus size={16} /></button><span>{zoom}%</span><button className="icon-button" aria-label="Aumentar zoom" disabled={zoom >= 200} onClick={() => setZoom(Math.min(200, zoom + 25))}><Plus size={16} /></button></div>
+      {textTool && <p className="text-mode-hint">Toque na folha para inserir. Arraste uma cifra para mover ou toque nela para editar.</p>}
+    </div>
     {metro && <Metronome bpm={bpm} onBpm={setBpm} onClose={() => setMetro(false)} />}
     <div className={`reader-scroll ${mode}`} style={{ touchAction: mode === 'pages' && zoom <= 100 ? 'pan-y' : 'auto' }} ref={scroll} onPointerDown={e => {
-      if (e.isPrimary && e.button === 0 && !pen) swipe.current = { x: e.clientX, y: e.clientY, time: performance.now(), scrollX: e.currentTarget.scrollLeft, scrollY: e.currentTarget.scrollTop, id: e.pointerId };
+      if (e.isPrimary && e.button === 0 && !pen && !textTool) swipe.current = { x: e.clientX, y: e.clientY, time: performance.now(), scrollX: e.currentTarget.scrollLeft, scrollY: e.currentTarget.scrollTop, id: e.pointerId };
       else swipe.current = null;
     }} onPointerCancel={() => { swipe.current = null; }} onPointerUp={e => {
       const start = swipe.current; swipe.current = null;
-      if (!start || start.id !== e.pointerId || pen) return;
+      if (!start || start.id !== e.pointerId || pen || textTool) return;
       const dx = e.clientX - start.x, dy = e.clientY - start.y;
       if (Math.abs(start.scrollX - e.currentTarget.scrollLeft) > 5 || Math.abs(start.scrollY - e.currentTarget.scrollTop) > 5) return;
       if (mode === 'pages' && zoom <= 100 && Math.abs(dx) > 80 && Math.abs(dy) < 65) { void navigate(dx < 0 ? 1 : -1); return; }
       if (Math.abs(dx) > 10 || Math.abs(dy) > 10 || performance.now() - start.time > 500) return;
       const bounds = e.currentTarget.getBoundingClientRect(), fraction = (e.clientX - bounds.left) / bounds.width;
-      if (mode === 'pages' && zoom <= 100 && fraction < .25) void navigate(-1);
-      else if (mode === 'pages' && zoom <= 100 && fraction > .75) void navigate(1);
+      if ((mode === 'cascade' || zoom <= 100) && fraction < .25) void navigate(-1);
+      else if ((mode === 'cascade' || zoom <= 100) && fraction > .75) void navigate(1);
       else setControls(value => !value);
     }} onScroll={() => {
       if (mode !== 'cascade' || !scroll.current) return;
@@ -205,9 +237,17 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
       const pages = scroll.current.querySelectorAll<HTMLElement>('[data-page]');
       for (const element of pages) { const bounds = element.getBoundingClientRect(); if (bounds.bottom > containerTop + 100) { setPage(Number(element.dataset.page)); break; } }
     }}>
-      {error ? <div className="reader-error"><h2>Não foi possível abrir a partitura</h2><p>{error}</p><button className="button primary" onClick={() => void close()}>Voltar ao repertório</button></div> : !pdf ? <div className="reader-error"><LoaderCircle className="spin" /><p>Abrindo partitura…</p></div> : <div className="pages-container" style={{ width: Math.max(dimensions.width, pageWidth) }}>{(mode === 'pages' ? [page] : Array.from({ length: count }, (_, i) => i + 1)).map(number => <section key={number} style={{ width: pageWidth, maxWidth: 'none' }}><PdfPage pdf={pdf} number={number} pen={pen} color={color} zoom={zoom} strokes={annotations[number] ?? []} onChange={strokes => updateInk(number, strokes)} /></section>)}</div>}
+      {error ? <div className="reader-error"><h2>Não foi possível abrir a partitura</h2><p>{error}</p><button className="button primary" onClick={() => void close()}>Voltar ao repertório</button></div> : !pdf ? <div className="reader-error"><LoaderCircle className="spin" /><p>Abrindo partitura…</p></div> : <div className="pages-container" style={{ width: Math.max(dimensions.width, pageWidth) }}>{(mode === 'pages' ? [page] : Array.from({ length: count }, (_, i) => i + 1)).map(number => <section key={number} style={{ width: pageWidth, maxWidth: 'none' }}>
+        <PdfPage pdf={pdf} number={number} pen={pen} color={color} zoom={zoom} strokes={annotations[number] ?? []} onChange={strokes => updateInk(number, strokes)}
+          notes={annotations.texts?.[number] ?? []} textTool={textTool}
+          onCreateNote={position => setEditing({ number, isNew: true, note: { id: crypto.randomUUID(), kind: 'text', text: '', color: noteColor, fontSize: noteSize, position } })}
+          onEditNote={note => setEditing({ number, note, isNew: false })} onMoveNote={note => updateNote(number, note)} />
+      </section>)}</div>}
     </div>
-    <footer className="reader-footer"><div className="page-navigation"><button className="icon-button" aria-label="Página anterior" disabled={!pdf || mode === 'cascade' || (page === 1 && !previous)} onClick={() => void navigate(-1)}><ChevronLeft size={20} /></button><span>{page} <i>/ {count}</i></span><button className="icon-button" aria-label="Próxima página" disabled={!pdf || mode === 'cascade'} title={page === count ? next ? `Próximo hino: ${next.title}` : 'Fim dos hinos deste dia' : 'Próxima página'} onClick={() => void navigate(1)}><ChevronRight size={20} /></button></div></footer>
+    <footer className="reader-footer"><div className="page-navigation"><button className="icon-button" aria-label={mode === 'cascade' ? 'Hino anterior' : 'Página anterior'} disabled={!pdf || ((mode === 'cascade' || page === 1) && !previous)} onClick={() => void navigate(-1)}><ChevronLeft size={20} /></button><span>{page} <i>/ {count}</i></span><button className="icon-button" aria-label={mode === 'cascade' ? 'Próximo hino' : 'Próxima página'} disabled={!pdf} title={mode === 'cascade' || page === count ? next ? `Próximo hino: ${next.title}` : 'Fim dos hinos deste dia' : 'Próxima página'} onClick={() => void navigate(1)}><ChevronRight size={20} /></button></div></footer>
     <button className="reader-controls-toggle" aria-label={controls ? 'Ocultar controles' : 'Mostrar controles'} onClick={() => setControls(!controls)}><SlidersHorizontal size={19} /></button>
+    {editing && <NoteEditor key={editing.note.id} note={editing.note} isNew={editing.isNew}
+      onCancel={() => setEditing(null)} onDelete={() => { deleteNote(editing.number, editing.note.id); setEditing(null); }}
+      onSave={note => { updateNote(editing.number, note); setNoteSize(note.fontSize); setNoteColor(note.color); setEditing(null); }} />}
   </div>;
 }

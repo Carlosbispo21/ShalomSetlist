@@ -47,7 +47,7 @@ test('folha usa todo o visor, toque lateral troca página e hino do mesmo dia', 
   await expect(page.locator('.ink-layer polyline')).toHaveCount(1);
 });
 
-test('página ampliada e leitura contínua não avançam hino ao tocar na borda', async ({ page }) => {
+test('página ampliada não troca de página com toque simples na borda', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Explorar com exemplos' }).click();
   await page.getByRole('button', { name: /^Exemplo 01/ }).click();
@@ -56,9 +56,30 @@ test('página ampliada e leitura contínua não avançam hino ao tocar na borda'
   const viewport = page.viewportSize()!;
   await page.mouse.click(viewport.width - 12, viewport.height / 2);
   await expect(page.getByLabel('Partitura, página 1')).toBeVisible();
-  await page.getByRole('button', { name: 'Mostrar controles' }).click();
+});
+
+test('modo contínuo troca hino por toque lateral e mantém a rolagem sem trocar', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Explorar com exemplos' }).click();
+  await page.getByRole('button', { name: /^Exemplo 01/ }).click();
   await page.getByRole('button', { name: 'Contínua' }).click();
   await expect(page.locator('.pdf-page')).toHaveCount(2);
-  await page.mouse.click(viewport.width - 12, viewport.height / 2);
+  await page.getByRole('button', { name: 'Aumentar zoom' }).click();
+  await page.locator('.reader-scroll').evaluate(element => { element.scrollTop = 180; });
+  await expect(page.getByRole('heading', { name: 'Exemplo 01' })).toBeVisible();
+  const viewport = page.viewportSize()!;
+  // Um arraste vertical na borda não deve abrir outra música.
+  await page.mouse.move(viewport.width - 15, viewport.height / 2);
+  await page.mouse.down(); await page.mouse.move(viewport.width - 15, viewport.height / 2 - 90); await page.mouse.up();
+  await expect(page.getByRole('heading', { name: 'Exemplo 01' })).toBeVisible();
+  await page.mouse.click(viewport.width - 15, viewport.height / 2);
+  await expect(page.getByRole('heading', { name: 'Exemplo 02' })).toBeVisible();
   await expect(page.getByLabel('Partitura, página 1')).toBeVisible();
+  await page.locator('.pdf-page').first().locator('.page-loading').waitFor({ state: 'hidden' });
+  await expect(page.locator('.reader-scroll')).toHaveClass(/cascade/);
+  await page.mouse.click(viewport.width - 15, viewport.height / 2);
+  await expect(page.getByText('Fim dos hinos deste dia.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Exemplo 03' })).toHaveCount(0);
+  await page.mouse.click(15, viewport.height / 2);
+  await expect(page.getByRole('heading', { name: 'Exemplo 01' })).toBeVisible();
 });
