@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 const repo = 'Carlosbispo21/ShalomSetlist';
 const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url)));
-const changelog = await readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+const changelog = (await readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const notes = changelog.split(`## ${version}\n`)[1]?.split('\n## ')[0]?.trim();
 if (!notes) throw new Error(`Descreva a versão ${version} em CHANGELOG.md antes de publicar.`);
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Versão inválida.');
@@ -24,11 +24,23 @@ async function request(url, method = 'GET', body, binary = false) {
   return response.status === 204 ? null : response.json();
 }
 const base = `https://api.github.com/repos/${repo}`;
-const release = await request(`${base}/releases`, 'POST', { tag_name: `v${version}`, target_commitish: 'main',
-  name: `Shalom ${version}`, draft: true,
-  body: notes + '\n\nAPK de teste. Instale por cima da versão anterior para preservar os dados.' });
-const asset = await request(`https://uploads.github.com/repos/${repo}/releases/${release.id}/assets?name=shalom-${version}.apk`, 'POST', apk, true);
-await request(`${base}/releases/${release.id}`, 'PATCH', { draft: false });
+let release;
+if (process.argv.includes('--refresh-manifest')) {
+  release = await request(`${base}/releases/tags/v${version}`);
+} else {
+  release = await request(`${base}/releases`, 'POST', { tag_name: `v${version}`, target_commitish: 'main',
+    name: `Shalom ${version}`, draft: true,
+    body: notes + '\n\nAPK de teste. Instale por cima da versão anterior para preservar os dados.' });
+  await request(`https://uploads.github.com/repos/${repo}/releases/${release.id}/assets?name=shalom-${version}.apk`, 'POST', apk, true);
+  // URLs de um draft são temporárias; use somente as URLs após a publicação.
+  release = await request(`${base}/releases/${release.id}`, 'PATCH', { draft: false });
+}
+const asset = release.assets.find(asset => asset.name === `shalom-${version}.apk`);
+if (release.draft || !asset || asset.size !== apk.length || (asset.digest && asset.digest !== `sha256:${sha256}`)) throw new Error('O APK publicado não corresponde à compilação local.');
+const expectedUrl = `https://github.com/${repo}/releases/download/v${version}/shalom-${version}.apk`;
+if (asset.browser_download_url !== expectedUrl) throw new Error('Aguarde a URL definitiva do lançamento antes de anunciar.');
+const download = await fetch(expectedUrl, { method: 'HEAD', signal: AbortSignal.timeout(20000) });
+if (!download.ok) throw new Error('O download ainda está indisponível. O aviso não foi atualizado.');
 const manifest = { version, apkUrl: asset.browser_download_url, sha256, publishedAt: new Date().toISOString() };
 const contentsUrl = `${base}/contents/latest.json`;
 let current;

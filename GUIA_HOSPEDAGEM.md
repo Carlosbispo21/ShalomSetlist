@@ -67,7 +67,7 @@ No Android, a partir da versão **0.3.0**, o app verifica `latest.json` na branc
 Antes de publicar, registre as mudanças na próxima versão de `CHANGELOG.md`. Para preparar e publicar a próxima versão no mesmo computador:
 
 ```powershell
-npm run release:build -- --bump
+node scripts/build-release.mjs --bump
 git add .
 git commit -m "Atualiza Shalom"
 git push
