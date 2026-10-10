@@ -17,23 +17,43 @@ try {
     dayButtons: [...document.querySelectorAll('.day-toggle')].map(button => ({ expanded: button.getAttribute('aria-expanded'), count: button.querySelector('.count-pill')?.textContent })),
     hidden: document.hidden, nativePlugin: !!(window.Capacitor?.PluginHeaders?.some(plugin => plugin.name === 'ReaderDisplay'))
   }))));
-  for (const toggle of await page.locator('.day-toggle[aria-expanded="false"]').all()) await toggle.click();
-  await page.locator('.score-open').first().waitFor({ timeout: 20000 });
   const before = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
-  await page.locator('.score-open').first().click();
-  await page.locator('.pdf-page canvas').waitFor({ timeout: 20000 });
-  await page.waitForFunction(() => !document.querySelector('.page-loading'), null, { timeout: 20000 });
+  if (!await page.locator('.reader').count()) {
+    for (const toggle of await page.locator('.day-toggle[aria-expanded="false"]').all()) await toggle.click();
+    await page.locator('.score-open').first().waitFor({ timeout: 20000 });
+    await page.locator('.score-open').first().click();
+  }
+  const previousMode = await page.evaluate(() => localStorage.getItem('shalom-reader-mode'));
+  if (process.argv.includes('--paged')) {
+    if (await page.getByRole('button', { name: 'Mostrar controles' }).isVisible()) await page.getByRole('button', { name: 'Mostrar controles' }).click();
+    await page.getByRole('button', { name: 'Por página' }).click();
+  }
+  await page.locator('.pdf-page canvas').first().waitFor({ timeout: 20000 });
+  await page.locator('.pdf-page').first().locator('.page-loading').waitFor({ state: 'hidden', timeout: 20000 });
   const after = await page.evaluate(() => {
     const bounds = document.querySelector('.reader-scroll').getBoundingClientRect();
-    return { width: innerWidth, height: innerHeight, screenHeight: screen.height, ratio: devicePixelRatio,
+    return { width: innerWidth, height: innerHeight, screenHeight: screen.height, ratio: devicePixelRatio, visualHeight: visualViewport?.height,
       reader: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+      readerRoot: document.querySelector('.reader').getBoundingClientRect().toJSON(),
       floating: getComputedStyle(document.querySelector('.reader-tools')).position,
       serviceWorkerControlled: !!navigator.serviceWorker?.controller };
   });
   console.log(JSON.stringify({ before, after }));
   await page.screenshot({ path: 'artifacts/android-leitor-real.png' });
-  await page.getByRole('button', { name: 'Ocultar controles' }).click();
-  await page.screenshot({ path: 'artifacts/android-folha-tela-cheia.png' });
+  if (await page.getByRole('button', { name: 'Ocultar controles' }).isVisible()) await page.getByRole('button', { name: 'Ocultar controles' }).click();
+  // CDP pode omitir pixels do canvas no WebView. Capture a tela Android real.
+  call('shell', 'screencap', '-p', '/data/local/tmp/shalom-reader-validation.png');
+  call('pull', '/data/local/tmp/shalom-reader-validation.png', 'artifacts/android-folha-tela-cheia.png');
+  call('shell', 'rm', '/data/local/tmp/shalom-reader-validation.png');
+  if (process.argv.includes('--paged') && await page.getByLabel('Partitura, página 1').count()) {
+    const viewport = page.viewportSize() ?? await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    await page.mouse.click(viewport.width - 15, viewport.height / 2);
+    console.log('Toque na lateral executado no modo por página.');
+    if (previousMode === 'cascade') {
+      if (await page.getByRole('button', { name: 'Mostrar controles' }).isVisible()) await page.getByRole('button', { name: 'Mostrar controles' }).click();
+      await page.getByRole('button', { name: 'Contínua' }).click();
+    }
+  }
   // O botão Voltar do Android deve sair do leitor, preservando os dados.
   call('shell', 'input', 'keyevent', '4');
   await page.locator('.score-open').first().waitFor({ timeout: 10000 });
