@@ -1,5 +1,14 @@
 # Alterações
 
+## 0.3.6
+
+- Troca lateral de folhas com acompanhamento do dedo, retorno de gestos curtos e respeito à redução de movimento.
+- Página atual e vizinhas ficam preparadas; os mesmos canvases são reutilizados ao avançar e voltar.
+- Renderização sequencial, cache limitado e remoção de cópias/repaint de páginas em notificações de tamanho repetidas.
+- Traço da caneta atualizado por quadro e controles sem blur no Safari antigo para reduzir o trabalho do tablet.
+- Marcadores por partitura: nome, salto de página, exclusão e armazenamento local junto às anotações.
+- Testes do pacote SystemJS realmente usado pelo Safari antigo, além de Chrome e WebKit.
+
 ## 0.3.5
 
 - Leitura compatível sem worker no Safari antigo, com alternativas para Streams, clonagem de buffers e visibilidade das páginas.

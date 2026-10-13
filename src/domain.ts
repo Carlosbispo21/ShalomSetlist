@@ -12,7 +12,7 @@ export type Point = { x: number; y: number };
 export type Stroke = { id: string; color: string; width: number; points: Point[] };
 export type TextNote = { id: string; kind: 'text'; text: string; color: string; fontSize: number; position: Point };
 // O campo adicional preserva as listas de rabiscos lidas pelas versões antigas.
-export type Annotations = Record<number, Stroke[]> & { texts?: Record<number, TextNote[]> };
+export type Annotations = Record<number, Stroke[]> & { texts?: Record<number, TextNote[]>; bookmarks?: {id:string;page:number;label:string}[] };
 const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
 export function localDate(now = new Date()) {
   const parts = dateFormatter.formatToParts(now);

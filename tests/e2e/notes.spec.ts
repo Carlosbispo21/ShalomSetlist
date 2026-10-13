@@ -4,10 +4,10 @@ test('cifras podem ser inseridas, movidas, editadas, persistidas e apagadas sem 
   await page.goto('/');
   await page.getByRole('button', { name: 'Explorar com exemplos' }).click();
   await page.getByRole('button', { name: /^Exemplo 01/ }).click();
-  await page.locator('.page-loading').waitFor({ state: 'hidden' });
+  await page.locator('.pdf-page[data-active=true] .page-loading').waitFor({ state: 'hidden' });
   // Rabisco preexistente deve sobreviver à inclusão e à exclusão de cifras.
   await page.getByRole('button', { name: 'Caneta', exact: true }).click();
-  const rect = (await page.locator('.pdf-page').boundingBox())!;
+  const rect = (await page.locator('.pdf-page[data-active=true]').boundingBox())!;
   await page.mouse.move(rect.x + rect.width * .4, rect.y + rect.height * .35);
   await page.mouse.down(); await page.mouse.move(rect.x + rect.width * .5, rect.y + rect.height * .36); await page.mouse.up();
   await expect(page.locator('.ink-layer polyline')).toHaveCount(1);
@@ -66,9 +66,9 @@ test('cifras da segunda página sobrevivem à mudança de hino no modo contínuo
   await page.getByRole('button', { name: 'Explorar com exemplos' }).click();
   await page.getByRole('button', { name: /^Exemplo 01/ }).click();
   await page.getByRole('button', { name: 'Próxima página' }).click();
-  await page.locator('.page-loading').waitFor({ state: 'hidden' });
+  await page.locator('.pdf-page[data-active=true] .page-loading').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Cifras', exact: true }).click();
-  const rect = (await page.locator('.pdf-page').boundingBox())!;
+  const rect = (await page.locator('.pdf-page[data-active=true]').boundingBox())!;
   await page.mouse.click(rect.x + rect.width * .4, rect.y + rect.height * .45);
   await page.getByLabel('Texto da cifra').fill('Sol\nRé');
   await page.getByRole('button', { name: 'Salvar cifra' }).click();

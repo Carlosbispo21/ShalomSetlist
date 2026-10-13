@@ -11,53 +11,58 @@ import { nativeAndroid } from './native';
 import { TextNotes, NoteEditor } from './TextNotes';
 import { Share2 } from 'lucide-react';
 import { pdfFilename, sharePdf, shareCancelled } from './sharing';
+import {usePageSlide} from './usePageSlide';
+import {PageMarks} from './PageMarks';
 
-function PdfPage({ pdf, number, strokes, onChange, onReady, pen, color, penWidth, zoom, notes, textTool, onCreateNote, onEditNote, onMoveNote }: {
+function PdfPage({ pdf, number, strokes, onChange, onReady, pen, color, penWidth, zoom, eager, enabled, active, notes, textTool, onCreateNote, onEditNote, onMoveNote }: {
   pdf: pdfjs.PDFDocumentProxy; number: number; strokes: Stroke[];
   onChange: (strokes: Stroke[]) => void; pen: boolean; color: string; penWidth: number; zoom: number;
   onReady:(number:number)=>void;
+  eager:boolean;enabled:boolean;active:boolean;
   notes: TextNote[]; textTool: boolean; onCreateNote: (position: Point) => void;
   onEditNote: (note: TextNote) => void; onMoveNote: (note: TextNote) => void;
 }) {
-  const wrapper = useRef<HTMLDivElement>(null), canvas = useRef<HTMLCanvasElement>(null);
-  const [ratio, setRatio] = useState(1.414), [visible, setVisible] = useState(false), [ready, setReady] = useState(false);
+  const wrapper = useRef<HTMLDivElement>(null), canvasHost = useRef<HTMLDivElement>(null);
+  const [ratio, setRatio] = useState(1.414), [visible, setVisible] = useState(eager), [ready, setReady] = useState(false);
   const [renderedNumber, setRenderedNumber] = useState(0);
   const [pageError,setPageError]=useState(''),[retry,setRetry]=useState(0);
   const ink=useInk({active:pen && renderedNumber===number,ratio,color,width:penWidth,strokes,onChange});
   const [originalWidth, setOriginalWidth] = useState(612);
   useEffect(() => {
+    if(eager){setVisible(true);return;}
     const observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) setVisible(true); }, { rootMargin: '500px' });
     if (wrapper.current) observer.observe(wrapper.current);
     return () => observer.disconnect();
-  }, []);
+  }, [eager]);
   useEffect(() => {
-    if (!visible) return;
-    let disposed=false, request=0;
+    if (!visible||!enabled) return;
+    let disposed=false, request=0, lastWidth=0;
     const render=async()=>{
       const id=++request;
       setPageError('');
       try {
         const width=wrapper.current!.clientWidth;
         const raster=await renderPage(pdf,number,width);
-        if(disposed || id!==request || !canvas.current)return;
-        const output=canvas.current;
-        output.width=raster.canvas.width;output.height=raster.canvas.height;
-        output.getContext('2d')!.drawImage(raster.canvas,0,0);
+        if(disposed || id!==request || !canvasHost.current)return;
+        // Reuse the already painted canvas instead of copying/repainting it
+        // on every turn or resize notification. Neighbour canvases stay mounted.
+        const output=raster.canvas;output.setAttribute('aria-label',`Partitura, página ${number}`);
+        if(canvasHost.current.firstChild!==output){while(canvasHost.current.firstChild)canvasHost.current.removeChild(canvasHost.current.firstChild);canvasHost.current.appendChild(output);}
         setOriginalWidth(raster.width);setRatio(raster.ratio);setReady(true);setRenderedNumber(number);
         onReady(number);
-        if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)output.animate?.([{opacity:.85,transform:'translateX(8px)'},{opacity:1,transform:'translateX(0)'}],{duration:150,easing:'ease-out'});
-        if(number<pdf.numPages)void renderPage(pdf,number+1,width).catch(()=>{});
-        if(number>1)void renderPage(pdf,number-1,width).catch(()=>{});
       }catch(error){if(!disposed&&id===request){setRenderedNumber(0);setPageError(error instanceof Error?error.message:'Não foi possível preparar esta página.');}}
     };
-    const observer=new ResizeObserver(()=>void render());
+    const observer=new ResizeObserver(()=>{
+      const width=Math.round(wrapper.current?.clientWidth??0);
+      if(width>0&&width!==lastWidth){lastWidth=width;void render();}
+    });
     if(wrapper.current)observer.observe(wrapper.current);
-    void render();
+    lastWidth=Math.round(wrapper.current!.clientWidth);void render();
     return()=>{disposed=true;observer.disconnect();};
-  },[pdf,number,visible,zoom,retry]);
-  return <div ref={wrapper} className="pdf-page" style={{ aspectRatio: `1 / ${ratio}` }} data-page={number}>
+  },[pdf,number,visible,enabled,zoom,retry]);
+  return <div ref={wrapper} className="pdf-page" style={{ aspectRatio: `1 / ${ratio}` }} data-page={number} data-active={active}>
     {pageError ? <div className="page-loading page-load-error" role="alert"><span>{pageError}</span><button className="button primary" onClick={()=>setRetry(value=>value+1)}>Tentar novamente</button></div> : !ready && <div className="page-loading"><LoaderCircle className="spin" /><span>Preparando página {number}</span></div>}
-    <canvas ref={canvas} aria-label={`Partitura, página ${renderedNumber || number}`} />
+    <div ref={canvasHost} className="raster-surface" />
     <svg ref={ink.layer} className={`ink-layer ${pen ? 'drawing' : ''}`} viewBox={`0 0 1000 ${1000 * ratio}`} style={{ touchAction: pen ? 'none' : 'auto' }} {...ink.handlers}>
       {[...strokes, ...(ink.draft ? [ink.draft] : [])].map(stroke => <polyline key={stroke.id} points={stroke.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round" />)}
     </svg>
@@ -116,6 +121,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   const inkRef = useRef<Annotations>({}), saveQueue = useRef(Promise.resolve()), dirty = useRef(false);
   const swipe = useRef<{ x: number; y: number; time: number; scrollX: number; scrollY: number; id: number } | null>(null), scroll = useRef<HTMLDivElement>(null);
   const changing = useRef(false);
+  const stageWidth=Math.max(dimensions.width,1),slide=usePageSlide(page,stageWidth);
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => setDimensions({ width: entry.contentRect.width, height: entry.contentRect.height }));
     if (scroll.current) observer.observe(scroll.current);
@@ -132,7 +138,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
       setError('');setPdf(null);setSharedFile(null);setReadyPages(new Set());
       try {
         const [blob, ink] = await pdfDeadline(Promise.all([downloadPdf(score), getAnnotations(score.id)]),30000,'O PDF demorou para baixar. Confira a conexão e tente novamente.');
-        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const bytes = new Uint8Array(await pdfDeadline(blob.arrayBuffer(),15000,'Não foi possível ler o arquivo salvo. Tente abrir novamente.'));
         if(disposed)return;
         const session=await openPdf(bytes),loaded=session.document;
         closePdf=session.dispose;
@@ -180,12 +186,25 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
     return () => window.removeEventListener('shalom-reader-back', back);
   });
   const count = pdf?.numPages ?? score.pages;
+  async function goToPage(target:number) {
+    if(!pdf||editing||changing.current||target<1||target>count)return;
+    if(target===page){slide.settle();return;}
+    changing.current=true;
+    try{
+      // If a neighbour is still preparing, leave the current sheet readable.
+      if(!readyPages.has(target))slide.settle();
+      const width=(Math.min(dimensions.width,dimensions.height/ratio))*zoom/100;
+      await renderPage(pdf,target,width);
+      slide.settle(target);setPage(target);scroll.current?.scrollTo(0,0);
+    }catch(error){slide.settle();notify(error instanceof Error?error.message:'Não foi possível trocar a página.');}
+    finally{changing.current=false;}
+  }
   async function navigate(direction: -1 | 1) {
     if (!pdf || editing || changing.current) return;
     const target = page + direction;
-    if (mode === 'pages' && target >= 1 && target <= count) { setPage(target); scroll.current?.scrollTo(0, 0); return; }
+    if (mode === 'pages' && target >= 1 && target <= count) { await goToPage(target); return; }
     const song = direction === 1 ? next : previous;
-    if (!song) { if (direction === 1) notify(isFestivity(score) ? 'Fim das partituras desta festividade.' : 'Fim dos hinos deste dia.'); return; }
+    if (!song) { slide.settle();if (direction === 1) notify(isFestivity(score) ? 'Fim das partituras desta festividade.' : 'Fim dos hinos deste dia.'); return; }
     changing.current = true;
     await saveQueue.current;
     if (dirty.current) { changing.current = false; notify('Salve as anotações antes de trocar de hino.'); return; }
@@ -201,8 +220,8 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
     };
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   });
-  const touchState=useRef({pen,textTool,mode,zoom,navigate,setControls});
-  touchState.current={pen,textTool,mode,zoom,navigate,setControls};
+  const touchState=useRef({pen,textTool,mode,zoom,navigate,setControls,slide});
+  touchState.current={pen,textTool,mode,zoom,navigate,setControls,slide};
   useEffect(()=>{
     const element=scroll.current!;
     let start:{x:number;y:number;time:number;scrollX:number;scrollY:number;id:number}|null=null;
@@ -213,22 +232,24 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
     const move=(event:TouchEvent)=>{
       if(!start)return;if(event.touches.length!==1){start=null;return;}
       const finger=event.touches[0],dx=finger.clientX-start.x,dy=finger.clientY-start.y;
-      if(touchState.current.mode==='pages'&&touchState.current.zoom<=100&&Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)*1.4)event.preventDefault();
+      if(touchState.current.mode==='pages'&&touchState.current.zoom<=100&&Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)*1.4){event.preventDefault();touchState.current.slide.drag(dx);}
     };
     const up=(event:TouchEvent)=>{
       const initial=start;start=null;const state=touchState.current;
-      if(!initial||state.pen||state.textTool)return;
+      if(!initial||state.pen||state.textTool){state.slide.settle();return;}
       let finger:Touch|undefined;for(let i=0;i<event.changedTouches.length;i++)if(event.changedTouches[i].identifier===initial.id)finger=event.changedTouches[i];
-      if(!finger)return;const dx=finger.clientX-initial.x,dy=finger.clientY-initial.y;
-      if(Math.abs(element.scrollLeft-initial.scrollX)>5||Math.abs(element.scrollTop-initial.scrollY)>5)return;
-      if(state.mode==='pages'&&state.zoom<=100&&Math.abs(dx)>70&&Math.abs(dy)<65){event.preventDefault();void state.navigate(dx<0?1:-1);return;}
-      if(Math.abs(dx)>10||Math.abs(dy)>10||performance.now()-initial.time>500)return;
+      if(!finger){state.slide.settle();return;}const dx=finger.clientX-initial.x,dy=finger.clientY-initial.y;
+      if(Math.abs(element.scrollLeft-initial.scrollX)>5||Math.abs(element.scrollTop-initial.scrollY)>5){state.slide.settle();return;}
+      const distance=Math.abs(dx),velocity=distance/Math.max(1,performance.now()-initial.time);
+      if(state.mode==='pages'&&state.zoom<=100&&distance>25&&Math.abs(dy)<distance*.65&&(distance>Math.max(40,element.clientWidth*.12)||velocity>.35)){event.preventDefault();void state.navigate(dx<0?1:-1);return;}
+      state.slide.settle();
+      if(distance>10||Math.abs(dy)>10||performance.now()-initial.time>500)return;
       const bounds=element.getBoundingClientRect(),fraction=(finger.clientX-bounds.left)/bounds.width;
       if((state.mode==='cascade'||state.zoom<=100)&&fraction<.25)void state.navigate(-1);
       else if((state.mode==='cascade'||state.zoom<=100)&&fraction>.75)void state.navigate(1);
       else state.setControls(value=>!value);
     };
-    const cancel=()=>{start=null;};
+    const cancel=()=>{start=null;touchState.current.slide.settle();};
     element.addEventListener('touchstart',down,{passive:true});element.addEventListener('touchmove',move,{passive:false});element.addEventListener('touchend',up,{passive:false});element.addEventListener('touchcancel',cancel);
     return()=>{element.removeEventListener('touchstart',down);element.removeEventListener('touchmove',move);element.removeEventListener('touchend',up);element.removeEventListener('touchcancel',cancel);};
   },[]);
@@ -243,6 +264,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
         <button className="icon-button" aria-label="Apagar rabiscos desta página" disabled={!annotations[page]?.length} onClick={() => updateInk(page, [])}><Eraser size={17} /></button>
       </>}</div>
       <button className={`button small text-tool ${textTool ? 'primary' : 'ghost'}`} aria-pressed={textTool} onClick={() => { setTextTool(!textTool); setPen(false); }}><Type size={16} />Cifras</button>
+      {pdf&&<PageMarks page={page} count={count} marks={annotations.bookmarks??[]} onChange={bookmarks=>persistAnnotations({...inkRef.current,bookmarks})} onJump={target=>{setMode('pages');setPen(false);setTextTool(false);void goToPage(target);}}/>}
       <div className="zoom-tools"><button className="icon-button" aria-label="Diminuir zoom" disabled={zoom <= 75} onClick={() => setZoom(Math.max(75, zoom - 25))}><Minus size={16} /></button><span>{zoom}%</span><button className="icon-button" aria-label="Aumentar zoom" disabled={zoom >= 200} onClick={() => setZoom(Math.min(200, zoom + 25))}><Plus size={16} /></button></div>
       {textTool && <p className="text-mode-hint">Toque na folha para inserir. Arraste uma cifra para mover ou toque nela para editar.</p>}
     </div>
@@ -251,12 +273,17 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
       if ((('ontouchstart' in window || navigator.maxTouchPoints>0) && e.pointerType !== 'mouse')) return;
       if (e.isPrimary && e.button === 0 && !pen && !textTool) swipe.current = { x: e.clientX, y: e.clientY, time: performance.now(), scrollX: e.currentTarget.scrollLeft, scrollY: e.currentTarget.scrollTop, id: e.pointerId };
       else swipe.current = null;
-    }} onPointerCancel={() => { swipe.current = null; }} onPointerUp={e => {
+    }} onPointerMove={e=>{
+      const start=swipe.current;if(!start||start.id!==e.pointerId||pen||textTool||mode!=='pages'||zoom>100)return;
+      const dx=e.clientX-start.x,dy=e.clientY-start.y;
+      if(Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)*1.4){e.preventDefault();slide.drag(dx);}
+    }} onPointerCancel={() => { swipe.current = null;slide.settle(); }} onPointerUp={e => {
       const start = swipe.current; swipe.current = null;
       if (!start || start.id !== e.pointerId || pen || textTool) return;
       const dx = e.clientX - start.x, dy = e.clientY - start.y;
-      if (Math.abs(start.scrollX - e.currentTarget.scrollLeft) > 5 || Math.abs(start.scrollY - e.currentTarget.scrollTop) > 5) return;
-      if (mode === 'pages' && zoom <= 100 && Math.abs(dx) > 80 && Math.abs(dy) < 65) { void navigate(dx < 0 ? 1 : -1); return; }
+      if (Math.abs(start.scrollX - e.currentTarget.scrollLeft) > 5 || Math.abs(start.scrollY - e.currentTarget.scrollTop) > 5){slide.settle();return;}
+      if (mode === 'pages' && zoom <= 100 && Math.abs(dx)>40 && Math.abs(dy)<Math.abs(dx)*.65) { void navigate(dx < 0 ? 1 : -1); return; }
+      slide.settle();
       if (Math.abs(dx) > 10 || Math.abs(dy) > 10 || performance.now() - start.time > 500) return;
       const bounds = e.currentTarget.getBoundingClientRect(), fraction = (e.clientX - bounds.left) / bounds.width;
       if ((mode === 'cascade' || zoom <= 100) && fraction < .25) void navigate(-1);
@@ -268,11 +295,11 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
       const pages = scroll.current.querySelectorAll<HTMLElement>('[data-page]');
       for (const element of pages) { const bounds = element.getBoundingClientRect(); if (bounds.bottom > containerTop + 100) { setPage(Number(element.dataset.page)); break; } }
     }}>
-      {error ? <div className="reader-error"><h2>Não foi possível abrir a partitura</h2><p>{error}</p><button className="button primary" onClick={()=>setLoadAttempt(value=>value+1)}>Tentar abrir novamente</button><button className="button ghost" onClick={() => void close()}>Voltar ao repertório</button></div> : !pdf ? <div className="reader-error"><LoaderCircle className="spin" /><p>Abrindo partitura…</p></div> : <div className="pages-container" style={{ width: Math.max(dimensions.width, pageWidth) }}>{(mode === 'pages' ? [page] : Array.from({ length: count }, (_, i) => i + 1)).map(number => <section key={mode === 'pages' ? 'paged-sheet' : number} style={{ width: pageWidth, maxWidth: 'none' }}>
-        <PdfPage pdf={pdf} number={number} pen={pen} color={color} penWidth={penWidth} zoom={zoom} strokes={annotations[number] ?? []} onReady={markReady} onChange={strokes => updateInk(number, strokes)}
-          notes={annotations.texts?.[number] ?? []} textTool={textTool}
+      {error ? <div className="reader-error"><h2>Não foi possível abrir a partitura</h2><p>{error}</p><button className="button primary" onClick={()=>setLoadAttempt(value=>value+1)}>Tentar abrir novamente</button><button className="button ghost" onClick={() => void close()}>Voltar ao repertório</button></div> : !pdf ? <div className="reader-error"><LoaderCircle className="spin" /><p>Abrindo partitura…</p></div> : <div ref={slide.stage} className={`pages-container ${mode==='pages'?'page-stage':''}`} style={{ width: Math.max(dimensions.width, pageWidth),...(mode==='pages'?{height:Math.max(dimensions.height,pageWidth*ratio)}:{}) }}>{(mode === 'pages' ? [page-1,page,page+1].filter(number=>number>=1&&number<=count) : Array.from({ length: count }, (_, i) => i + 1)).map(number => <section key={number} className={mode==='pages'?'page-pane':''} data-sheet={number} aria-hidden={mode==='pages'&&number!==page?true:undefined} style={mode==='pages'?{width:Math.max(dimensions.width,pageWidth),transform:`translate3d(${(number-page)*stageWidth}px,0,0)`,pointerEvents:number===page?'auto':'none'}:{width:pageWidth,maxWidth:'none'}}>
+        <div className="page-paper" style={{width:pageWidth}}><PdfPage pdf={pdf} number={number} pen={pen&&(mode==='cascade'||number===page)} color={color} penWidth={penWidth} zoom={zoom} active={mode==='cascade'||number===page} eager={mode==='pages'} enabled={mode==='cascade'||number===page||readyPages.has(page)} strokes={annotations[number] ?? []} onReady={markReady} onChange={strokes => updateInk(number, strokes)}
+          notes={annotations.texts?.[number] ?? []} textTool={textTool&&(mode==='cascade'||number===page)}
           onCreateNote={position => setEditing({ number, isNew: true, note: { id: crypto.randomUUID(), kind: 'text', text: '', color: noteColor, fontSize: noteSize, position } })}
-          onEditNote={note => setEditing({ number, note, isNew: false })} onMoveNote={note => updateNote(number, note)} />
+          onEditNote={note => setEditing({ number, note, isNew: false })} onMoveNote={note => updateNote(number, note)} /></div>
       </section>)}</div>}
     </div>
     <footer className="reader-footer"><div className="page-navigation"><button className="icon-button" aria-label={mode === 'cascade' ? 'Hino anterior' : 'Página anterior'} disabled={!pdf || ((mode === 'cascade' || page === 1) && !previous)} onClick={() => void navigate(-1)}><ChevronLeft size={20} /></button><span>{page} <i>/ {count}</i></span><button className="icon-button" aria-label={mode === 'cascade' ? 'Próximo hino' : 'Próxima página'} disabled={!pdf} title={mode === 'cascade' || page === count ? next ? `Próximo hino: ${next.title}` : 'Fim dos hinos deste dia' : 'Próxima página'} onClick={() => void navigate(1)}><ChevronRight size={20} /></button></div></footer>

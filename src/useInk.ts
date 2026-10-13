@@ -4,6 +4,7 @@ import type {Stroke,Point} from './domain';
 export function useInk({active,ratio,color,width,strokes,onChange}:{active:boolean;ratio:number;color:string;width:number;strokes:Stroke[];onChange:(strokes:Stroke[])=>void}) {
   const layer=useRef<SVGSVGElement>(null), current=useRef<Stroke|null>(null), pointer=useRef<number|null>(null);
   const [draft,setDraft]=useState<Stroke|null>(null);
+  const frame=useRef<number|undefined>(undefined);
   const state=useRef({active,ratio,color,width,strokes,onChange}); state.current={active,ratio,color,width,strokes,onChange};
   const touch=typeof window!=='undefined' && ('ontouchstart' in window || navigator.maxTouchPoints>0);
   function point(x:number,y:number):Point {
@@ -11,9 +12,16 @@ export function useInk({active,ratio,color,width,strokes,onChange}:{active:boole
     return {x:Math.max(0,Math.min(1000,(x-bounds.left)/bounds.width*1000)),y:Math.max(0,Math.min(1000*state.current.ratio,(y-bounds.top)/bounds.height*1000*state.current.ratio))};
   }
   function begin(x:number,y:number) {const stroke={id:crypto.randomUUID(),color:state.current.color,width:state.current.width,points:[point(x,y)]};current.current=stroke;setDraft(stroke);}
-  function move(x:number,y:number) {if(!current.current)return;const stroke={...current.current,points:[...current.current.points,point(x,y)]};current.current=stroke;setDraft(stroke);}
+  function move(x:number,y:number) {
+    const stroke=current.current;if(!stroke)return;
+    const next=point(x,y),last=stroke.points[stroke.points.length-1];
+    if(Math.abs(next.x-last.x)+Math.abs(next.y-last.y)<.4)return;
+    stroke.points.push(next);
+    if(frame.current===undefined)frame.current=requestAnimationFrame(()=>{frame.current=undefined;if(current.current)setDraft({...current.current,points:[...current.current.points]});});
+  }
   function finish() {
     const stroke=current.current;current.current=null;pointer.current=null;setDraft(null);
+    if(frame.current!==undefined){cancelAnimationFrame(frame.current);frame.current=undefined;}
     if(!stroke)return;
     if(stroke.points.length===1)stroke.points.push({x:stroke.points[0].x+.1,y:stroke.points[0].y+.1});
     state.current.onChange([...state.current.strokes,stroke]);
@@ -33,7 +41,7 @@ export function useInk({active,ratio,color,width,strokes,onChange}:{active:boole
       for(let i=0;i<event.changedTouches.length;i++)if(event.changedTouches[i].identifier===pointer.current)finish();
     };
     svg.addEventListener('touchstart',start,{passive:false});svg.addEventListener('touchmove',moved,{passive:false});svg.addEventListener('touchend',ended,{passive:false});svg.addEventListener('touchcancel',ended,{passive:false});
-    return()=>{svg.removeEventListener('touchstart',start);svg.removeEventListener('touchmove',moved);svg.removeEventListener('touchend',ended);svg.removeEventListener('touchcancel',ended);};
+    return()=>{if(frame.current!==undefined)cancelAnimationFrame(frame.current);svg.removeEventListener('touchstart',start);svg.removeEventListener('touchmove',moved);svg.removeEventListener('touchend',ended);svg.removeEventListener('touchcancel',ended);};
   },[]);
   return {layer,draft,handlers:{
     onPointerDown:(event:PointerEvent<SVGSVGElement>)=>{

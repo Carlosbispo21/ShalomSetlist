@@ -1,6 +1,6 @@
 # iPad e leitura
 
-Versão 0.3.5: compilação para Safari/iOS 12, desenho por toque com o dedo, páginas preparadas em segundo plano e ajustes no cache dos PDFs.
+Versão 0.3.6: troca lateral com acompanhamento do dedo, folhas vizinhas prontas, marcadores e ajustes para reduzir o trabalho do Safari antigo.
 
 Abra https://shalomsetlist.pages.dev/ no Safari. Aguarde a publicação concluir; quando houver aviso, atualize fora da partitura. Se o site antigo não abrir, feche a aba e abra o endereço novamente. Não apague os dados do site para atualizar: eles guardam PDFs e anotações locais.
 
@@ -9,9 +9,16 @@ Abra https://shalomsetlist.pages.dev/ no Safari. Aguarde a publicação concluir
 - Ative **Caneta** e desenhe com o dedo. Escolha traço fino, médio ou grosso. Enquanto a caneta estiver ativa, o gesto de desenho não vira a folha.
 - Desative Caneta/Cifras para navegar. No modo **Por página**, deslize à esquerda para avançar e à direita para voltar. Os toques nas bordas continuam funcionando.
 - A folha atual fica visível até a próxima terminar de renderizar. O app prepara as páginas próximas para reduzir a espera.
+- A folha acompanha o gesto horizontal e desliza para a próxima. Um arraste curto volta à página atual. As folhas já preparadas são reutilizadas, sem redesenhar o PDF a cada troca.
 - Com zoom acima de 100%, arraste para explorar a folha ampliada; use os botões para trocar de página.
 - Pedais que enviam **seta esquerda/direita** ou **Page Up/Page Down** funcionam como comandos de navegação. Não é necessário parear o pedal dentro do app; conecte-o nas configurações do tablet. A compatibilidade do pedal físico precisa ser conferida no aparelho.
 - O leitor preserva os PDFs e anotações antigos. Novos PDFs são armazenados como bytes para evitar falhas de Blob no IndexedDB do Safari.
+
+## Marcadores
+
+Na barra flutuante, abra **Marcadores**, escreva um nome como “Refrão” ou “Retorno” e toque em **+**. O marcador guarda a página atual. Toque no nome para voltar àquela página; use a lixeira para excluir. O salto abre o modo Por página e desativa as ferramentas de desenho.
+
+Os marcadores são pessoais e ficam neste aparelho, junto aos rabiscos e cifras; funcionam offline com o PDF já baixado. Não são enviados para os outros músicos. Não é necessária uma migração SQL.
 
 ## Responsáveis
 
@@ -25,7 +32,7 @@ O repertório e a sequência do leitor usam Crianças → Adolescentes → Joven
 
 ## Validação
 
-Os testes usam Chrome e WebKit com toque. A configuração `ipad-legacy-apis` remove Pointer Events, ResizeObserver, Blob.arrayBuffer, crypto.randomUUID e AbortSignal.timeout para exercitar as alternativas. A compilação também verifica a sintaxe dos arquivos para navegadores antigos e usa worker PDF clássico.
+Os testes usam Chrome e WebKit com toque. A configuração `ipad-legacy-apis` carrega o pacote SystemJS para navegadores antigos e remove Pointer Events, ResizeObserver, Blob.arrayBuffer, crypto.randomUUID e AbortSignal.timeout para exercitar as alternativas. Os testes conferem o acompanhamento do gesto, reutilização das telas já preparadas, persistência de marcadores e retorno offline. A compilação também verifica a sintaxe dos arquivos para navegadores antigos e usa worker PDF clássico.
 
 WebKit no computador não é o Safari de um iPad com iOS 12. A validação final nessa versão exige abrir o site em um aparelho real; testes no computador não garantem todos os modelos, PDFs e limitações de memória.
 

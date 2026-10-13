@@ -1,4 +1,25 @@
 /* A folha ocupa o visor; nenhum controle reserva espaço na leitura. */
+.raster-surface>canvas{display:block;width:100%;height:auto}
+.immersive .pages-container.page-stage{display:block;position:relative;overflow:hidden}
+.immersive .page-stage>.page-pane{position:absolute;top:0;left:0;height:100%;max-width:none;margin:0;display:flex;align-items:center;justify-content:center;background:#fff;transition:transform .18s cubic-bezier(.22,.61,.36,1);will-change:transform}
+.page-stage .page-paper{flex-shrink:0}
+.page-stage .page-pane[aria-hidden=true]{visibility:hidden}
+.page-stage.dragging .page-pane,.page-stage.sliding .page-pane{visibility:visible}
+.page-stage.dragging>.page-pane{transition:none}
+.page-marks{position:relative}
+.marks-panel{position:absolute;bottom:44px;left:50%;transform:translateX(-50%);width:280px;max-width:calc(100vw - 28px);padding:14px;border:1px solid #e2e6e7;border-radius:18px;background:#fffffff5;box-shadow:0 8px 35px #20282a20;color:#20282a}
+.marks-heading,.marks-panel form,.marks-list>div{display:flex;align-items:center;justify-content:space-between}
+.marks-heading strong{font-size:13px}
+.marks-panel form{margin-top:8px}
+.marks-panel input{min-width:0;width:100%;font-size:16px;border:1px solid #e2e6e7;border-radius:10px;padding:9px}
+.marks-panel .icon-button{flex-shrink:0}
+.marks-panel>p{font-size:11px;line-height:1.5;margin-top:12px;color:#667174}
+.marks-list{max-height:220px;overflow:auto;margin-top:8px}
+.mark-jump{background:transparent;display:flex;align-items:center;justify-content:space-between;flex:1;min-width:0;text-align:left;padding:12px 3px;color:#20282a;font-size:12px}
+.mark-jump>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:10px}
+.mark-jump small{white-space:nowrap;color:#667174;font-size:10px}
+@media(prefers-reduced-motion:reduce){.immersive .page-stage>.page-pane{transition:none}}
+.legacy-touch .immersive .reader-header,.legacy-touch .immersive .reader-tools,.legacy-touch .immersive .reader-footer{backdrop-filter:none;-webkit-backdrop-filter:none;background:#fffffff5}
 .reader.immersive{padding:0;display:block;background:#fff;isolation:isolate}
 .immersive .reader-scroll{position:absolute;inset:0;width:100%;height:100%;padding:0;overflow:auto;background:#fff;z-index:0}
 .immersive .reader-scroll.pages{touch-action:pan-y}

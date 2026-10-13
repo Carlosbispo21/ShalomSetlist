@@ -11,7 +11,7 @@ test('folha usa todo o visor, toque lateral troca página e hino do mesmo dia', 
   const scroll = (await page.locator('.reader-scroll').boundingBox())!;
   expect(scroll.x).toBe(0); expect(scroll.y).toBe(0);
   expect(scroll.width).toBe(viewport.width); expect(scroll.height).toBe(viewport.height);
-  const sheet = (await page.locator('.pdf-page').boundingBox())!;
+  const sheet = (await page.locator('.pdf-page[data-active=true]').boundingBox())!;
   expect(sheet.width).toBeLessThanOrEqual(viewport.width + 1);
   expect(sheet.height).toBeLessThanOrEqual(viewport.height + 1);
   await page.getByRole('button', { name: 'Ocultar controles' }).click();
@@ -27,7 +27,7 @@ test('folha usa todo o visor, toque lateral troca página e hino do mesmo dia', 
   await expect(page.getByRole('heading', { name: 'Exemplo 01' })).toBeVisible();
   await expect(page.getByLabel('Partitura, página 2')).toBeVisible();
   await page.getByRole('button', { name: 'Caneta', exact: true }).click();
-  const ink = page.locator('.ink-layer'), rect = (await ink.boundingBox())!;
+  const ink = page.locator('.pdf-page[data-active=true] .ink-layer'), rect = (await ink.boundingBox())!;
   await page.mouse.move(rect.x + rect.width * .85, rect.y + rect.height / 2);
   await page.mouse.down(); await page.mouse.move(rect.x + rect.width * .90, rect.y + rect.height / 2 + 15); await page.mouse.up();
   await expect(ink.locator('polyline')).toHaveCount(1);
@@ -75,7 +75,7 @@ test('modo contínuo troca hino por toque lateral e mantém a rolagem sem trocar
   await page.mouse.click(viewport.width - 15, viewport.height / 2);
   await expect(page.getByRole('heading', { name: 'Exemplo 02' })).toBeVisible();
   await expect(page.getByLabel('Partitura, página 1')).toBeVisible();
-  await page.locator('.pdf-page').first().locator('.page-loading').waitFor({ state: 'hidden' });
+  await page.locator('.pdf-page').first().locator('.pdf-page[data-active=true] .page-loading').waitFor({ state: 'hidden' });
   await expect(page.locator('.reader-scroll')).toHaveClass(/cascade/);
   await page.mouse.click(viewport.width - 15, viewport.height / 2);
   await expect(page.getByText('Fim dos hinos deste dia.')).toBeVisible();

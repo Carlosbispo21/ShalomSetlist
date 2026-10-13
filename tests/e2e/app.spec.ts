@@ -14,12 +14,12 @@ test('exemplos, PDF, caneta persistente, metrônomo e leitura offline', async ({
   await page.getByRole('button', { name: 'Próxima página' }).click();
   await expect(page.getByLabel('Partitura, página 2')).toBeVisible();
   await page.getByRole('button', { name: 'Página anterior' }).click();
-  const initialWidth = (await page.locator('.pdf-page').boundingBox())!.width;
+  const initialWidth = (await page.locator('.pdf-page[data-active=true]').boundingBox())!.width;
   await page.getByRole('button', { name: 'Aumentar zoom' }).click();
-  await expect.poll(async () => (await page.locator('.pdf-page').boundingBox())!.width).toBeGreaterThan(initialWidth);
+  await expect.poll(async () => (await page.locator('.pdf-page[data-active=true]').boundingBox())!.width).toBeGreaterThan(initialWidth);
   await page.getByRole('button', { name: 'Diminuir zoom' }).click();
   await page.getByRole('button', { name: 'Caneta', exact: true }).click();
-  const ink = page.locator('.ink-layer'); const rect = (await ink.boundingBox())!;
+  const ink = page.locator('.pdf-page[data-active=true] .ink-layer'); const rect = (await ink.boundingBox())!;
   await page.mouse.move(rect.x + 80, rect.y + 120); await page.mouse.down();
   await page.mouse.move(rect.x + 140, rect.y + 150, { steps: 8 }); await page.mouse.up();
   await expect(ink.locator('polyline')).toHaveCount(1);
