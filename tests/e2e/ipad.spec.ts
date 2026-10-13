@@ -1,6 +1,14 @@
 import {test,expect} from '@playwright/test';
 
 test.beforeEach(async({page},info)=>{
+  if(info.project.name==='ipad-legacy-apis')await page.route('**/*',async route=>{
+    if(route.request().resourceType()!=='document')return route.continue();
+    const response=await route.fetch();
+    // Safari 12 runs Vite's SystemJS bundle. Removing APIs alone from a
+    // modern module browser does not exercise that separate build.
+    const html=(await response.text()).replace(/<script\b[^>]*type="module"[^>]*>[\s\S]*?<\/script>/g,'').replace(/\snomodule\b/g,'');
+    await route.fulfill({response,body:html});
+  });
   if(info.project.name==='ipad-legacy-apis')await page.addInitScript(()=>{
     delete (window as unknown as Record<string,unknown>).PointerEvent;
     delete (window as unknown as Record<string,unknown>).IntersectionObserver;
