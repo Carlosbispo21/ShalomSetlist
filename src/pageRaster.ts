@@ -1,4 +1,5 @@
 import type {PDFDocumentProxy} from 'pdfjs-dist';
+import {pdfDeadline} from './pdfEngine';
 type Raster={canvas:HTMLCanvasElement;ratio:number;width:number};
 const documents=new WeakMap<PDFDocumentProxy,Map<string,Promise<Raster>>>();
 export function renderPage(pdf:PDFDocumentProxy,number:number,width:number):Promise<Raster> {
@@ -7,9 +8,11 @@ export function renderPage(pdf:PDFDocumentProxy,number:number,width:number):Prom
   const key=`${number}:${pixels}`;
   const existing=cache.get(key);if(existing)return existing;
   const rendered=(async()=>{
-    const page=await pdf.getPage(number),original=page.getViewport({scale:1}),viewport=page.getViewport({scale:pixels/original.width});
+    const page=await pdfDeadline(pdf.getPage(number),30000,'Não foi possível preparar esta página. Tente novamente.'),original=page.getViewport({scale:1}),viewport=page.getViewport({scale:pixels/original.width});
     const canvas=document.createElement('canvas');canvas.width=Math.floor(viewport.width);canvas.height=Math.floor(viewport.height);
-    await page.render({canvasContext:canvas.getContext('2d')!,viewport}).promise;
+    const task=page.render({canvasContext:canvas.getContext('2d')!,viewport});
+    try{await pdfDeadline(task.promise,45000,'A página demorou para responder. Tente novamente.');}
+    catch(error){task.cancel();throw error;}
     return {canvas,ratio:original.height/original.width,width:original.width};
   })();
   cache.set(key,rendered);void rendered.catch(()=>cache!.delete(key));

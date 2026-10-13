@@ -5,7 +5,7 @@ export function useInk({active,ratio,color,width,strokes,onChange}:{active:boole
   const layer=useRef<SVGSVGElement>(null), current=useRef<Stroke|null>(null), pointer=useRef<number|null>(null);
   const [draft,setDraft]=useState<Stroke|null>(null);
   const state=useRef({active,ratio,color,width,strokes,onChange}); state.current={active,ratio,color,width,strokes,onChange};
-  const touch=typeof window!=='undefined' && 'ontouchstart' in window;
+  const touch=typeof window!=='undefined' && ('ontouchstart' in window || navigator.maxTouchPoints>0);
   function point(x:number,y:number):Point {
     const bounds=layer.current!.getBoundingClientRect();
     return {x:Math.max(0,Math.min(1000,(x-bounds.left)/bounds.width*1000)),y:Math.max(0,Math.min(1000*state.current.ratio,(y-bounds.top)/bounds.height*1000*state.current.ratio))};
@@ -42,8 +42,8 @@ export function useInk({active,ratio,color,width,strokes,onChange}:{active:boole
       try{event.currentTarget.setPointerCapture?.(event.pointerId);}catch{/* Safari may reject SVG capture; in-sheet drawing still works. */}
       begin(event.clientX,event.clientY);
     },
-    onPointerMove:(event:PointerEvent<SVGSVGElement>)=>{if(pointer.current===event.pointerId&&current.current){event.preventDefault();event.stopPropagation();move(event.clientX,event.clientY);}},
-    onPointerUp:(event:PointerEvent<SVGSVGElement>)=>{if(pointer.current===event.pointerId){event.stopPropagation();finish();}},
-    onPointerCancel:(event:PointerEvent<SVGSVGElement>)=>{if(pointer.current===event.pointerId)finish();}
+    onPointerMove:(event:PointerEvent<SVGSVGElement>)=>{if(touch&&event.pointerType!=='mouse')return;if(pointer.current===event.pointerId&&current.current){event.preventDefault();event.stopPropagation();move(event.clientX,event.clientY);}},
+    onPointerUp:(event:PointerEvent<SVGSVGElement>)=>{if(touch&&event.pointerType!=='mouse')return;if(pointer.current===event.pointerId){event.stopPropagation();finish();}},
+    onPointerCancel:(event:PointerEvent<SVGSVGElement>)=>{if(touch&&event.pointerType!=='mouse')return;if(pointer.current===event.pointerId)finish();}
   }};
 }

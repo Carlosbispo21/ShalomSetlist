@@ -3,6 +3,11 @@ import {test,expect} from '@playwright/test';
 test.beforeEach(async({page},info)=>{
   if(info.project.name==='ipad-legacy-apis')await page.addInitScript(()=>{
     delete (window as unknown as Record<string,unknown>).PointerEvent;
+    delete (window as unknown as Record<string,unknown>).IntersectionObserver;
+    delete (window as unknown as Record<string,unknown>).IntersectionObserverEntry;
+    Object.defineProperty(window,'ReadableStream',{value:undefined,configurable:true,writable:true});
+    Object.defineProperty(window,'structuredClone',{value:undefined,configurable:true,writable:true});
+    Object.defineProperty(window,'Worker',{value:undefined,configurable:true,writable:true});
     Object.defineProperty(window,'ResizeObserver',{value:undefined,configurable:true,writable:true});
     Object.defineProperty(crypto,'randomUUID',{value:undefined,configurable:true,writable:true});
     Object.defineProperty(Blob.prototype,'arrayBuffer',{value:undefined,configurable:true,writable:true});
@@ -24,6 +29,7 @@ test('toque desenha, persiste, desfaz e não troca a folha enquanto a caneta est
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto('/');await page.getByRole('button',{name:'Explorar com exemplos'}).click();
   await page.getByRole('button',{name:/^Exemplo 01/}).click();
+  await expect(page.getByLabel('Partitura, página 1')).toBeVisible();
   await page.locator('.page-loading').waitFor({state:'hidden'});
   await page.getByRole('button',{name:'Caneta',exact:true}).click();
   await page.getByLabel('Espessura da caneta').selectOption('4');

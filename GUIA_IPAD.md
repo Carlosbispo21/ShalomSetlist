@@ -1,6 +1,6 @@
 # iPad e leitura
 
-Versão 0.3.4: compilação para Safari/iOS 12, desenho por toque com o dedo, páginas preparadas em segundo plano e ajustes no cache dos PDFs.
+Versão 0.3.5: compilação para Safari/iOS 12, desenho por toque com o dedo, páginas preparadas em segundo plano e ajustes no cache dos PDFs.
 
 Abra https://shalomsetlist.pages.dev/ no Safari. Aguarde a publicação concluir; quando houver aviso, atualize fora da partitura. Se o site antigo não abrir, feche a aba e abra o endereço novamente. Não apague os dados do site para atualizar: eles guardam PDFs e anotações locais.
 
@@ -30,3 +30,9 @@ Os testes usam Chrome e WebKit com toque. A configuração `ipad-legacy-apis` re
 WebKit no computador não é o Safari de um iPad com iOS 12. A validação final nessa versão exige abrir o site em um aparelho real; testes no computador não garantem todos os modelos, PDFs e limitações de memória.
 
 Referências: [compilação para navegadores antigos no Vite](https://vite.dev/guide/build), [Pointer Events no Safari 13](https://webkit.org/blog/9674/new-webkit-features-in-safari-13/), [manual do piaScore](https://piascore.com/manual/) e [pedais no piaScore](https://help.piascore.com/hc/en-us/sections/360000119612-Page-turning).
+
+## Se a partitura não abrir
+
+A versão 0.3.5 usa uma forma de leitura sem worker no Safari antigo. Nos aparelhos mais novos, tenta essa forma automaticamente se o processamento em segundo plano falhar. A abertura e o preparo da página têm limites de espera; uma falha mostra o motivo e um botão para tentar novamente, em vez de manter o carregamento infinito.
+
+As APIs de Streams e clonagem de dados também são supridas no ambiente que processa o PDF. Os testes agora removem IntersectionObserver, ReadableStream, structuredClone e Worker, além das APIs já verificadas. Ainda é necessário confirmar o comportamento no Safari do iPad antigo real.

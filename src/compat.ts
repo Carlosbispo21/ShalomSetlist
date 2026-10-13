@@ -1,4 +1,5 @@
 import 'abortcontroller-polyfill/dist/polyfill-patch-fetch';
+import 'intersection-observer';
 import ResizeObserverPolyfill from 'resize-observer-polyfill';
 // Platform APIs are separate from JavaScript syntax/polyfills in the build.
 if (!window.ResizeObserver) window.ResizeObserver=ResizeObserverPolyfill;

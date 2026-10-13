@@ -1,7 +1,7 @@
 {
   "name": "shalom-setlist",
   "private": true,
-  "version": "0.3.4",
+  "version": "0.3.5",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -21,12 +21,15 @@
     "@capacitor/share": "^7.0.4",
     "@supabase/supabase-js": "^2.57.4",
     "abortcontroller-polyfill": "^1.7.8",
+    "core-js": "^3.50.0",
     "idb": "^8.0.3",
+    "intersection-observer": "^0.12.2",
     "lucide-react": "^0.468.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "web-streams-polyfill": "^4.3.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.4.3",

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-import PdfWorker from './pdfWorker?worker';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import {openPdf,pdfDeadline} from './pdfEngine';
 import { useInk } from './useInk';
 import { renderPage } from './pageRaster';
 import { ArrowLeft, ChevronLeft, ChevronRight, Columns2, Rows3, PenLine, Undo2, Eraser, Minus, Plus, Play, Pause, X, SlidersHorizontal, LoaderCircle, Check, Maximize, Type } from 'lucide-react';
@@ -11,17 +11,18 @@ import { nativeAndroid } from './native';
 import { TextNotes, NoteEditor } from './TextNotes';
 import { Share2 } from 'lucide-react';
 import { pdfFilename, sharePdf, shareCancelled } from './sharing';
-pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
 
-function PdfPage({ pdf, number, strokes, onChange, pen, color, penWidth, zoom, notes, textTool, onCreateNote, onEditNote, onMoveNote }: {
+function PdfPage({ pdf, number, strokes, onChange, onReady, pen, color, penWidth, zoom, notes, textTool, onCreateNote, onEditNote, onMoveNote }: {
   pdf: pdfjs.PDFDocumentProxy; number: number; strokes: Stroke[];
   onChange: (strokes: Stroke[]) => void; pen: boolean; color: string; penWidth: number; zoom: number;
+  onReady:(number:number)=>void;
   notes: TextNote[]; textTool: boolean; onCreateNote: (position: Point) => void;
   onEditNote: (note: TextNote) => void; onMoveNote: (note: TextNote) => void;
 }) {
   const wrapper = useRef<HTMLDivElement>(null), canvas = useRef<HTMLCanvasElement>(null);
   const [ratio, setRatio] = useState(1.414), [visible, setVisible] = useState(false), [ready, setReady] = useState(false);
   const [renderedNumber, setRenderedNumber] = useState(0);
+  const [pageError,setPageError]=useState(''),[retry,setRetry]=useState(0);
   const ink=useInk({active:pen && renderedNumber===number,ratio,color,width:penWidth,strokes,onChange});
   const [originalWidth, setOriginalWidth] = useState(612);
   useEffect(() => {
@@ -34,6 +35,7 @@ function PdfPage({ pdf, number, strokes, onChange, pen, color, penWidth, zoom, n
     let disposed=false, request=0;
     const render=async()=>{
       const id=++request;
+      setPageError('');
       try {
         const width=wrapper.current!.clientWidth;
         const raster=await renderPage(pdf,number,width);
@@ -42,18 +44,19 @@ function PdfPage({ pdf, number, strokes, onChange, pen, color, penWidth, zoom, n
         output.width=raster.canvas.width;output.height=raster.canvas.height;
         output.getContext('2d')!.drawImage(raster.canvas,0,0);
         setOriginalWidth(raster.width);setRatio(raster.ratio);setReady(true);setRenderedNumber(number);
+        onReady(number);
         if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)output.animate?.([{opacity:.85,transform:'translateX(8px)'},{opacity:1,transform:'translateX(0)'}],{duration:150,easing:'ease-out'});
         if(number<pdf.numPages)void renderPage(pdf,number+1,width).catch(()=>{});
         if(number>1)void renderPage(pdf,number-1,width).catch(()=>{});
-      }catch{if(!disposed)setRenderedNumber(0);}
+      }catch(error){if(!disposed&&id===request){setRenderedNumber(0);setPageError(error instanceof Error?error.message:'Não foi possível preparar esta página.');}}
     };
     const observer=new ResizeObserver(()=>void render());
     if(wrapper.current)observer.observe(wrapper.current);
     void render();
     return()=>{disposed=true;observer.disconnect();};
-  },[pdf,number,visible,zoom]);
+  },[pdf,number,visible,zoom,retry]);
   return <div ref={wrapper} className="pdf-page" style={{ aspectRatio: `1 / ${ratio}` }} data-page={number}>
-    {!ready && <div className="page-loading"><LoaderCircle className="spin" /><span>Preparando página {number}</span></div>}
+    {pageError ? <div className="page-loading page-load-error" role="alert"><span>{pageError}</span><button className="button primary" onClick={()=>setRetry(value=>value+1)}>Tentar novamente</button></div> : !ready && <div className="page-loading"><LoaderCircle className="spin" /><span>Preparando página {number}</span></div>}
     <canvas ref={canvas} aria-label={`Partitura, página ${renderedNumber || number}`} />
     <svg ref={ink.layer} className={`ink-layer ${pen ? 'drawing' : ''}`} viewBox={`0 0 1000 ${1000 * ratio}`} style={{ touchAction: pen ? 'none' : 'auto' }} {...ink.handlers}>
       {[...strokes, ...(ink.draft ? [ink.draft] : [])].map(stroke => <polyline key={stroke.id} points={stroke.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round" />)}
@@ -92,6 +95,9 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   notify: (message: string) => void;
 }) {
   const [pdf, setPdf] = useState<pdfjs.PDFDocumentProxy | null>(null), [error, setError] = useState('');
+  const [loadAttempt,setLoadAttempt]=useState(0);
+  const [readyPages,setReadyPages]=useState<Set<number>>(new Set());
+  const markReady=useCallback((number:number)=>setReadyPages(previous=>previous.has(number)?previous:new Set(previous).add(number)),[]);
   const [sharedFile, setSharedFile] = useState<File | null>(null), [sharing, setSharing] = useState(false);
   async function share() {
     if (!sharedFile || sharing) return;
@@ -121,17 +127,19 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
     return () => { disposed = true; };
   }, [pdf, page]);
   useEffect(() => {
-    let disposed = false; let document: pdfjs.PDFDocumentProxy | undefined;
+    let disposed = false; let closePdf:(()=>Promise<void>)|undefined;
     const load = async () => {
+      setError('');setPdf(null);setSharedFile(null);setReadyPages(new Set());
       try {
-        const [blob, ink] = await Promise.all([downloadPdf(score), getAnnotations(score.id)]);
+        const [blob, ink] = await pdfDeadline(Promise.all([downloadPdf(score), getAnnotations(score.id)]),30000,'O PDF demorou para baixar. Confira a conexão e tente novamente.');
         const bytes = new Uint8Array(await blob.arrayBuffer());
-        const loaded = await pdfjs.getDocument({ data: bytes, isEvalSupported: false }).promise;
-        document = loaded;
-        if (disposed) { await loaded.destroy(); return; }
+        if(disposed)return;
+        const session=await openPdf(bytes),loaded=session.document;
+        closePdf=session.dispose;
+        if (disposed) { await closePdf(); return; }
         setSharedFile(new File([blob],pdfFilename(score.filename || score.title),{type:'application/pdf'}));
         inkRef.current = ink; setAnnotations(ink); setPage(Math.min(initialPage, loaded.numPages)); setPdf(loaded);
-      } catch { if (!disposed) setError('Não foi possível abrir o PDF. Conecte-se à internet e tente novamente.'); }
+      } catch(error) { if (!disposed) setError(error instanceof Error?error.message:'Não foi possível abrir o PDF. Tente novamente.'); }
     };
     void load();
     let wake: { release: () => Promise<void> } | undefined;
@@ -140,8 +148,8 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
     const visibility = () => { if (documentVisibility()) void keepAwake(); };
     function documentVisibility() { return window.document.visibilityState === 'visible'; }
     window.document.addEventListener('visibilitychange', visibility);
-    return () => { disposed = true; void document?.destroy(); void wake?.release(); window.document.removeEventListener('visibilitychange', visibility); };
-  }, [score.id]);
+    return () => { disposed = true; void closePdf?.().catch(()=>{}); void wake?.release(); window.document.removeEventListener('visibilitychange', visibility); };
+  }, [score.id,loadAttempt]);
   useEffect(() => { localStorage.setItem('shalom-reader-mode', mode); }, [mode]);
   function updateInk(number: number, strokes: Stroke[]) {
     const next = { ...inkRef.current, [number]: strokes };
@@ -229,7 +237,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
     <header className="reader-header"><button className="icon-button back" aria-label="Voltar ao repertório" onClick={() => void close()}><ArrowLeft /></button><div className="reader-title"><h1>{score.title}</h1><p>{score.group}{isFestivity(score) ? ' · Festividade' : ''}{score.demo ? ' · Exemplo' : ''}</p></div><span className="reader-offline"><Check size={14} />{pdf ? 'No aparelho' : 'Carregando'}</span><button className="icon-button" aria-label="Compartilhar PDF" title="Compartilhar PDF original, sem anotações" disabled={!sharedFile || sharing} onClick={() => void share()}>{sharing ? <LoaderCircle className="spin" size={19} /> : <Share2 size={19} />}</button>{!nativeAndroid && document.fullscreenEnabled && <button className="icon-button" aria-label="Alternar tela cheia" onClick={() => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => notify('Tela cheia indisponível neste navegador.'))}><Maximize size={19} /></button>}<button className={`icon-button ${metro ? 'selected' : ''}`} aria-label="Abrir metrônomo" onClick={() => setMetro(!metro)}><SlidersHorizontal /></button></header>
     <div className="reader-tools">
       <div className="segmented"><button className={mode === 'pages' ? 'active' : ''} onClick={() => setMode('pages')}><Columns2 size={16} />Por página</button><button className={mode === 'cascade' ? 'active' : ''} onClick={() => setMode('cascade')}><Rows3 size={16} />Contínua</button></div>
-      <div className="pen-tools"><button className={`button small ${pen ? 'primary' : 'ghost'}`} onClick={() => { setPen(!pen); setTextTool(false); }} aria-pressed={pen}><PenLine size={16} />Caneta</button>{pen && <>
+      <div className="pen-tools"><button disabled={!pdf||!readyPages.has(page)} className={`button small ${pen ? 'primary' : 'ghost'}`} onClick={() => { setPen(!pen); setTextTool(false); }} aria-pressed={pen}><PenLine size={16} />Caneta</button>{pen && <>
         <label className="pen-width">Traço<select aria-label="Espessura da caneta" value={penWidth} onChange={event=>setPenWidth(Number(event.target.value))}><option value={1.5}>Fino</option><option value={2.5}>Médio</option><option value={4}>Grosso</option></select></label><div className="pen-colors">{['#5367de', '#e36959', '#263247'].map(c => <button key={c} aria-label={`Cor ${c}`} style={{ background: c }} className={color === c ? 'active' : ''} onClick={() => setColor(c)} />)}</div>
         <button className="icon-button" aria-label="Desfazer último traço" disabled={!annotations[page]?.length} onClick={() => updateInk(page, annotations[page].slice(0, -1))}><Undo2 size={17} /></button>
         <button className="icon-button" aria-label="Apagar rabiscos desta página" disabled={!annotations[page]?.length} onClick={() => updateInk(page, [])}><Eraser size={17} /></button>
@@ -240,7 +248,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
     </div>
     {metro && <Metronome bpm={bpm} onBpm={setBpm} onClose={() => setMetro(false)} />}
     <div className={`reader-scroll ${mode}`} style={{ touchAction: pen ? 'none' : mode === 'pages' && zoom <= 100 ? 'pan-y' : 'auto' }} ref={scroll} onPointerDown={e => {
-      if (('ontouchstart' in window && e.pointerType !== 'mouse')) return;
+      if ((('ontouchstart' in window || navigator.maxTouchPoints>0) && e.pointerType !== 'mouse')) return;
       if (e.isPrimary && e.button === 0 && !pen && !textTool) swipe.current = { x: e.clientX, y: e.clientY, time: performance.now(), scrollX: e.currentTarget.scrollLeft, scrollY: e.currentTarget.scrollTop, id: e.pointerId };
       else swipe.current = null;
     }} onPointerCancel={() => { swipe.current = null; }} onPointerUp={e => {
@@ -260,8 +268,8 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
       const pages = scroll.current.querySelectorAll<HTMLElement>('[data-page]');
       for (const element of pages) { const bounds = element.getBoundingClientRect(); if (bounds.bottom > containerTop + 100) { setPage(Number(element.dataset.page)); break; } }
     }}>
-      {error ? <div className="reader-error"><h2>Não foi possível abrir a partitura</h2><p>{error}</p><button className="button primary" onClick={() => void close()}>Voltar ao repertório</button></div> : !pdf ? <div className="reader-error"><LoaderCircle className="spin" /><p>Abrindo partitura…</p></div> : <div className="pages-container" style={{ width: Math.max(dimensions.width, pageWidth) }}>{(mode === 'pages' ? [page] : Array.from({ length: count }, (_, i) => i + 1)).map(number => <section key={mode === 'pages' ? 'paged-sheet' : number} style={{ width: pageWidth, maxWidth: 'none' }}>
-        <PdfPage pdf={pdf} number={number} pen={pen} color={color} penWidth={penWidth} zoom={zoom} strokes={annotations[number] ?? []} onChange={strokes => updateInk(number, strokes)}
+      {error ? <div className="reader-error"><h2>Não foi possível abrir a partitura</h2><p>{error}</p><button className="button primary" onClick={()=>setLoadAttempt(value=>value+1)}>Tentar abrir novamente</button><button className="button ghost" onClick={() => void close()}>Voltar ao repertório</button></div> : !pdf ? <div className="reader-error"><LoaderCircle className="spin" /><p>Abrindo partitura…</p></div> : <div className="pages-container" style={{ width: Math.max(dimensions.width, pageWidth) }}>{(mode === 'pages' ? [page] : Array.from({ length: count }, (_, i) => i + 1)).map(number => <section key={mode === 'pages' ? 'paged-sheet' : number} style={{ width: pageWidth, maxWidth: 'none' }}>
+        <PdfPage pdf={pdf} number={number} pen={pen} color={color} penWidth={penWidth} zoom={zoom} strokes={annotations[number] ?? []} onReady={markReady} onChange={strokes => updateInk(number, strokes)}
           notes={annotations.texts?.[number] ?? []} textTool={textTool}
           onCreateNote={position => setEditing({ number, isNew: true, note: { id: crypto.randomUUID(), kind: 'text', text: '', color: noteColor, fontSize: noteSize, position } })}
           onEditNote={note => setEditing({ number, note, isNew: false })} onMoveNote={note => updateNote(number, note)} />

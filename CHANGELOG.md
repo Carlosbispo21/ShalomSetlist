@@ -1,5 +1,12 @@
 # Alterações
 
+## 0.3.5
+
+- Leitura compatível sem worker no Safari antigo, com alternativas para Streams, clonagem de buffers e visibilidade das páginas.
+- Recuperação automática quando o worker do PDF falha, sem alterar o PDF ou as anotações.
+- Limites de espera na abertura e renderização; erros visíveis com opção de tentar novamente.
+- Detecção de toque considera a capacidade do aparelho para evitar conflito com Pointer Events.
+
 ## 0.3.4
 
 - Compilação e alternativas de APIs para Safari/iOS 12, com worker PDF clássico.
