@@ -2,7 +2,7 @@
 
 O Cloudflare Pages hospeda a interface do app. As contas, o repertório e os PDFs ficam no seu Supabase. Pelo GitHub, configure a URL e a chave **pública** nas variáveis de build do Cloudflare, conforme abaixo. Os APKs e o ZIP já compilados neste computador incluem essa configuração.
 
-Guia revisado para a versão **0.3.3**. Use o fluxo pelo GitHub para publicar a web automaticamente.
+Guia revisado para a versão **0.3.4**. Use o fluxo pelo GitHub para publicar a web automaticamente.
 
 ## Publicar pelo GitHub no Cloudflare Pages
 
@@ -106,3 +106,7 @@ Consulte [GUIA_COMPARTILHAMENTO.md](GUIA_COMPARTILHAMENTO.md) para compartilhar 
 O GitHub pode manter o manifesto de atualização anterior em cache por alguns minutos. O publicador agora aguarda o endereço consultado pelos APKs informar a versão nova antes de confirmar a publicação. Para conferir separadamente, execute `node scripts/verify-release-feed.mjs`.
 
 O APK verifica ao abrir, ao retomar e a cada minuto com a tela visível e internet. O aviso aparece fora do leitor de PDF. Se necessário, saia da partitura e aguarde um minuto na tela inicial. O arquivo APK também pode ser baixado diretamente na página Releases.
+
+## iPad e responsáveis
+
+A versão 0.3.4 inclui ajustes para Safari/iOS 12, desenho por toque e permissões simplificadas. Veja [GUIA_IPAD.md](GUIA_IPAD.md). O endereço publicado é https://shalomsetlist.pages.dev/. A migração de responsáveis já foi executada neste projeto.

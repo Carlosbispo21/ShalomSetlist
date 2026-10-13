@@ -3,10 +3,11 @@ import { PDFDocument } from 'pdf-lib';
 import { Music2, CalendarDays, BookOpen, Users, Settings2, Plus, Search, ChevronDown, ChevronRight, ArrowUpRight, FileMusic, CloudDownload, Check, WifiOff, X, UploadCloud, Smartphone, Tablet, ShieldCheck, Copy, LogOut, LoaderCircle, RefreshCw, Trash2, Info, Heart, Sparkles, Download, PartyPopper } from 'lucide-react';
 import { GROUPS, MAX_PDF_BYTES, formatDate, sortScores, validBpm, weekKey, weekendDate, isActiveScore, isFestivity, type ScoreScope, type Day, type Group, type Room, type Score } from './domain';
 import { clearExpired, getPdf, getScores, removeScore, saveScore } from './db';
-import { cloud, deleteScore, downloadPdf, getRoom, joinRoom, loginDirector, publishScore, pullScores, ROOM_CACHE_KEY, listDirectors, grantDirector, removeDirector, type Director } from './sync';
+import { cloud, deleteScore, downloadPdf, getRoom, joinRoom, loginDirector, publishScore, pullScores, ROOM_CACHE_KEY } from './sync';
 import { loadDemo } from './demo';
 import Reader from './Reader';
 import Festivities from './Festivities';
+import Directors from './Directors';
 import { hasAppUpdate, updateApp, appVersion } from './pwa';
 import { nativeAndroid, readerDisplay } from './native';
 import { shareInvitation, shareCancelled } from './sharing';
@@ -60,28 +61,6 @@ function Connect({ onClose, onConnected }: { onClose: () => void; onConnected: (
       {tab === 'director' && <button className="text-button full" onClick={() => { setSignup(!signup); setError(''); }}>{signup ? 'Já tenho uma conta' : 'Primeiro acesso? Criar minha conta'}</button>}
     </>}
   </ModalFrame>;
-}
-
-function Directors({ notify }: { notify: (message: string) => void }) {
-  const [directors, setDirectors] = useState<Director[]>([]), [email, setEmail] = useState(''), [error, setError] = useState('');
-  const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [currentId, setCurrentId] = useState('');
-  const refresh = useCallback(async () => { try { setDirectors(await listDirectors()); setError(''); } catch { setError('Não foi possível carregar os responsáveis. Verifique a conexão e a atualização do banco.'); } finally { setLoading(false); } }, []);
-  useEffect(() => { void refresh(); void cloud?.auth.getSession().then(({ data }) => setCurrentId(data.session?.user.id ?? '')); }, [refresh]);
-  async function add(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true); setError('');
-    try { await grantDirector(email); setEmail(''); await refresh(); notify('Permissão de responsável concedida.'); }
-    catch (e) { setError(e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String(e.message) : 'Não foi possível conceder a permissão.'); }
-    finally { setBusy(false); }
-  }
-  async function revoke(id: string) {
-    setBusy(true); setError('');
-    try { await removeDirector(id); await refresh(); notify('Permissão de responsável removida. A conta continua como músico.'); }
-    catch { setError('Não foi possível remover a permissão.'); } finally { setBusy(false); }
-  }
-  return <section className="settings-card directors-card"><div className="directors-heading"><Users size={20} /><h2>Responsáveis</h2></div><p className="directors-help">Cada responsável usa sua própria conta e pode enviar ou remover partituras. Para adicionar alguém, essa pessoa deve entrar nesta banda com e-mail e código primeiro.</p>
-    {loading ? <p className="directors-help">Carregando…</p> : <div className="directors-list">{directors.map(d => <div className="director-row" key={d.user_id}><span className="director-avatar">{d.email[0]?.toUpperCase()}</span><div><strong>{d.email}</strong><small>{d.is_owner ? 'Criador da banda' : 'Responsável'}{d.user_id === currentId ? ' · Você' : ''}</small></div>{!d.is_owner && d.user_id !== currentId && <button className="icon-button" disabled={busy} aria-label={`Remover permissão de ${d.email}`} onClick={() => void revoke(d.user_id)}><X size={17} /></button>}</div>)}</div>}
-    <form className="director-form" onSubmit={add}><label>E-mail da conta<input aria-label="E-mail do novo responsável" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="nome@email.com" /></label><button className="button primary" disabled={busy || loading}>{busy ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />}Adicionar responsável</button></form>{error && <p className="form-error" role="alert">{error}</p>}
-  </section>;
 }
 
 function Upload({ room, position, scope = 'weekly', initialGroup = 'Grupo de louvor', onClose, onSaved }: { room: Room | null; position: number; scope?: ScoreScope; initialGroup?: Group; onClose: () => void; onSaved: (group: Group) => void }) {

@@ -32,6 +32,7 @@ function command(text, cwd = root) {
 }
 command('npm test');
 command('npm run build');
+command('node scripts/check-legacy-syntax.mjs');
 command('npm run test:e2e');
 execFileSync(process.execPath, [join(root, 'node_modules/@capacitor/cli/bin/capacitor'), 'sync', 'android'], { cwd: root, env, stdio: 'inherit', windowsHide: true });
 command(windows ? 'gradlew.bat assembleDebug --console=plain' : './gradlew assembleDebug --console=plain', join(root, 'android'));

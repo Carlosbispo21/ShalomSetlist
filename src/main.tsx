@@ -1,3 +1,4 @@
+import './compat';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -7,6 +8,7 @@ import './reader.css';
 import './festivities.css';
 import './sharing.css';
 import './branding.css';
+import './ipad.css';
 import { nativeAndroid } from './native';
 class ErrorBoundary extends React.Component<React.PropsWithChildren, { failed: boolean }> {
   state = { failed: false };

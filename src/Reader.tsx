@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
+import PdfWorker from './pdfWorker?worker';
+import { useInk } from './useInk';
+import { renderPage } from './pageRaster';
 import { ArrowLeft, ChevronLeft, ChevronRight, Columns2, Rows3, PenLine, Undo2, Eraser, Minus, Plus, Play, Pause, X, SlidersHorizontal, LoaderCircle, Check, Maximize, Type } from 'lucide-react';
 import { getAnnotations, saveAnnotations } from './db';
 import { downloadPdf } from './sync';
@@ -9,18 +11,18 @@ import { nativeAndroid } from './native';
 import { TextNotes, NoteEditor } from './TextNotes';
 import { Share2 } from 'lucide-react';
 import { pdfFilename, sharePdf, shareCancelled } from './sharing';
-pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
 
-function PdfPage({ pdf, number, strokes, onChange, pen, color, zoom, notes, textTool, onCreateNote, onEditNote, onMoveNote }: {
+function PdfPage({ pdf, number, strokes, onChange, pen, color, penWidth, zoom, notes, textTool, onCreateNote, onEditNote, onMoveNote }: {
   pdf: pdfjs.PDFDocumentProxy; number: number; strokes: Stroke[];
-  onChange: (strokes: Stroke[]) => void; pen: boolean; color: string; zoom: number;
+  onChange: (strokes: Stroke[]) => void; pen: boolean; color: string; penWidth: number; zoom: number;
   notes: TextNote[]; textTool: boolean; onCreateNote: (position: Point) => void;
   onEditNote: (note: TextNote) => void; onMoveNote: (note: TextNote) => void;
 }) {
   const wrapper = useRef<HTMLDivElement>(null), canvas = useRef<HTMLCanvasElement>(null);
   const [ratio, setRatio] = useState(1.414), [visible, setVisible] = useState(false), [ready, setReady] = useState(false);
-  const [draft, setDraft] = useState<Stroke | null>(null);
-  const draftRef = useRef<Stroke | null>(null);
+  const [renderedNumber, setRenderedNumber] = useState(0);
+  const ink=useInk({active:pen && renderedNumber===number,ratio,color,width:penWidth,strokes,onChange});
   const [originalWidth, setOriginalWidth] = useState(612);
   useEffect(() => {
     const observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) setVisible(true); }, { rootMargin: '500px' });
@@ -29,55 +31,32 @@ function PdfPage({ pdf, number, strokes, onChange, pen, color, zoom, notes, text
   }, []);
   useEffect(() => {
     if (!visible) return;
-    let disposed = false, task: pdfjs.RenderTask | undefined;
-    let queue = Promise.resolve();
-    const render = () => {
-      queue = queue.catch(() => {}).then(async () => {
-        if (disposed || !canvas.current || !wrapper.current) return;
-        const page = await pdf.getPage(number);
-        if (disposed) return;
-        const original = page.getViewport({ scale: 1 });
-        setOriginalWidth(original.width);
-        setRatio(original.height / original.width);
-        const scale = wrapper.current.clientWidth / original.width;
-        const viewport = page.getViewport({ scale: scale * Math.min(devicePixelRatio || 1, 2) });
-        const ctx = canvas.current!.getContext('2d')!;
-        canvas.current!.width = Math.floor(viewport.width); canvas.current!.height = Math.floor(viewport.height);
-        task = page.render({ canvasContext: ctx, viewport });
-        try { await task.promise; if (!disposed) setReady(true); } catch (error) {
-          if (!(error instanceof Error && error.name === 'RenderingCancelledException')) throw error;
-        }
-      });
+    let disposed=false, request=0;
+    const render=async()=>{
+      const id=++request;
+      try {
+        const width=wrapper.current!.clientWidth;
+        const raster=await renderPage(pdf,number,width);
+        if(disposed || id!==request || !canvas.current)return;
+        const output=canvas.current;
+        output.width=raster.canvas.width;output.height=raster.canvas.height;
+        output.getContext('2d')!.drawImage(raster.canvas,0,0);
+        setOriginalWidth(raster.width);setRatio(raster.ratio);setReady(true);setRenderedNumber(number);
+        if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)output.animate?.([{opacity:.85,transform:'translateX(8px)'},{opacity:1,transform:'translateX(0)'}],{duration:150,easing:'ease-out'});
+        if(number<pdf.numPages)void renderPage(pdf,number+1,width).catch(()=>{});
+        if(number>1)void renderPage(pdf,number-1,width).catch(()=>{});
+      }catch{if(!disposed)setRenderedNumber(0);}
     };
-    const observer = new ResizeObserver(render);
-    if (wrapper.current) observer.observe(wrapper.current);
-    return () => { disposed = true; observer.disconnect(); task?.cancel(); };
-  }, [pdf, number, visible, zoom]);
-  function point(event: React.PointerEvent<SVGSVGElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return { x: Math.max(0, Math.min(1000, (event.clientX - rect.left) / rect.width * 1000)), y: Math.max(0, Math.min(1000 * ratio, (event.clientY - rect.top) / rect.height * 1000 * ratio)) };
-  }
-  function finish() {
-    if (!draftRef.current) return;
-    const stroke = draftRef.current;
-    if (stroke.points.length === 1) stroke.points.push({ x: stroke.points[0].x + .1, y: stroke.points[0].y + .1 });
-    onChange([...strokes, stroke]); draftRef.current = null; setDraft(null);
-  }
+    const observer=new ResizeObserver(()=>void render());
+    if(wrapper.current)observer.observe(wrapper.current);
+    void render();
+    return()=>{disposed=true;observer.disconnect();};
+  },[pdf,number,visible,zoom]);
   return <div ref={wrapper} className="pdf-page" style={{ aspectRatio: `1 / ${ratio}` }} data-page={number}>
     {!ready && <div className="page-loading"><LoaderCircle className="spin" /><span>Preparando página {number}</span></div>}
-    <canvas ref={canvas} aria-label={`Partitura, página ${number}`} />
-    <svg className={`ink-layer ${pen ? 'drawing' : ''}`} viewBox={`0 0 1000 ${1000 * ratio}`} style={{ touchAction: pen ? 'none' : 'auto' }}
-      onPointerDown={event => {
-        if (!pen || event.button !== 0) return;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        const stroke = { id: crypto.randomUUID(), color, width: 2.5, points: [point(event)] };
-        draftRef.current = stroke; setDraft(stroke);
-      }} onPointerMove={event => {
-        if (!draftRef.current) return;
-        const next = { ...draftRef.current, points: [...draftRef.current.points, point(event)] };
-        draftRef.current = next; setDraft(next);
-      }} onPointerUp={finish} onPointerCancel={() => { draftRef.current = null; setDraft(null); }}>
-      {[...strokes, ...(draft ? [draft] : [])].map(stroke => <polyline key={stroke.id} points={stroke.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round" />)}
+    <canvas ref={canvas} aria-label={`Partitura, página ${renderedNumber || number}`} />
+    <svg ref={ink.layer} className={`ink-layer ${pen ? 'drawing' : ''}`} viewBox={`0 0 1000 ${1000 * ratio}`} style={{ touchAction: pen ? 'none' : 'auto' }} {...ink.handlers}>
+      {[...strokes, ...(ink.draft ? [ink.draft] : [])].map(stroke => <polyline key={stroke.id} points={stroke.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round" />)}
     </svg>
     <TextNotes notes={notes} active={textTool && ready} ratio={ratio} pageWidth={originalWidth}
       onCreate={onCreateNote} onEdit={onEditNote} onMove={onMoveNote} />
@@ -123,6 +102,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   }
   const [mode, setMode] = useState<'pages' | 'cascade'>(() => localStorage.getItem('shalom-reader-mode') === 'cascade' ? 'cascade' : 'pages');
   const [page, setPage] = useState(initialPage), [pen, setPen] = useState(false), [color, setColor] = useState('#5367de');
+  const [penWidth,setPenWidth]=useState(2.5);
   const [textTool, setTextTool] = useState(false), [editing, setEditing] = useState<{ number: number; note: TextNote; isNew: boolean } | null>(null);
   const [noteSize, setNoteSize] = useState(16), [noteColor, setNoteColor] = useState('#20282a');
   const [controls, setControls] = useState(true), [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight }), [ratio, setRatio] = useState(1.414);
@@ -207,19 +187,50 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
     const key = (event: KeyboardEvent) => {
       if (editing || (event.target as HTMLElement).matches('input, select, textarea')) return;
       if (event.key === 'Escape') { event.preventDefault(); void close(); }
-      else if (!pen && !textTool && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
-        event.preventDefault(); void navigate(event.key === 'ArrowRight' ? 1 : -1);
+      else if (!pen && !textTool && ['ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'].includes(event.key)) {
+        event.preventDefault(); void navigate(['ArrowRight','PageDown'].includes(event.key) ? 1 : -1);
       }
     };
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   });
+  const touchState=useRef({pen,textTool,mode,zoom,navigate,setControls});
+  touchState.current={pen,textTool,mode,zoom,navigate,setControls};
+  useEffect(()=>{
+    const element=scroll.current!;
+    let start:{x:number;y:number;time:number;scrollX:number;scrollY:number;id:number}|null=null;
+    const down=(event:TouchEvent)=>{
+      if(touchState.current.pen||touchState.current.textTool||event.touches.length!==1){start=null;return;}
+      const finger=event.touches[0];start={x:finger.clientX,y:finger.clientY,time:performance.now(),scrollX:element.scrollLeft,scrollY:element.scrollTop,id:finger.identifier};
+    };
+    const move=(event:TouchEvent)=>{
+      if(!start)return;if(event.touches.length!==1){start=null;return;}
+      const finger=event.touches[0],dx=finger.clientX-start.x,dy=finger.clientY-start.y;
+      if(touchState.current.mode==='pages'&&touchState.current.zoom<=100&&Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)*1.4)event.preventDefault();
+    };
+    const up=(event:TouchEvent)=>{
+      const initial=start;start=null;const state=touchState.current;
+      if(!initial||state.pen||state.textTool)return;
+      let finger:Touch|undefined;for(let i=0;i<event.changedTouches.length;i++)if(event.changedTouches[i].identifier===initial.id)finger=event.changedTouches[i];
+      if(!finger)return;const dx=finger.clientX-initial.x,dy=finger.clientY-initial.y;
+      if(Math.abs(element.scrollLeft-initial.scrollX)>5||Math.abs(element.scrollTop-initial.scrollY)>5)return;
+      if(state.mode==='pages'&&state.zoom<=100&&Math.abs(dx)>70&&Math.abs(dy)<65){event.preventDefault();void state.navigate(dx<0?1:-1);return;}
+      if(Math.abs(dx)>10||Math.abs(dy)>10||performance.now()-initial.time>500)return;
+      const bounds=element.getBoundingClientRect(),fraction=(finger.clientX-bounds.left)/bounds.width;
+      if((state.mode==='cascade'||state.zoom<=100)&&fraction<.25)void state.navigate(-1);
+      else if((state.mode==='cascade'||state.zoom<=100)&&fraction>.75)void state.navigate(1);
+      else state.setControls(value=>!value);
+    };
+    const cancel=()=>{start=null;};
+    element.addEventListener('touchstart',down,{passive:true});element.addEventListener('touchmove',move,{passive:false});element.addEventListener('touchend',up,{passive:false});element.addEventListener('touchcancel',cancel);
+    return()=>{element.removeEventListener('touchstart',down);element.removeEventListener('touchmove',move);element.removeEventListener('touchend',up);element.removeEventListener('touchcancel',cancel);};
+  },[]);
   const pageWidth = (mode === 'pages' ? Math.min(dimensions.width, dimensions.height / ratio) : dimensions.width) * zoom / 100;
   return <div className={`reader immersive ${controls ? '' : 'controls-hidden'}`}>
     <header className="reader-header"><button className="icon-button back" aria-label="Voltar ao repertório" onClick={() => void close()}><ArrowLeft /></button><div className="reader-title"><h1>{score.title}</h1><p>{score.group}{isFestivity(score) ? ' · Festividade' : ''}{score.demo ? ' · Exemplo' : ''}</p></div><span className="reader-offline"><Check size={14} />{pdf ? 'No aparelho' : 'Carregando'}</span><button className="icon-button" aria-label="Compartilhar PDF" title="Compartilhar PDF original, sem anotações" disabled={!sharedFile || sharing} onClick={() => void share()}>{sharing ? <LoaderCircle className="spin" size={19} /> : <Share2 size={19} />}</button>{!nativeAndroid && document.fullscreenEnabled && <button className="icon-button" aria-label="Alternar tela cheia" onClick={() => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => notify('Tela cheia indisponível neste navegador.'))}><Maximize size={19} /></button>}<button className={`icon-button ${metro ? 'selected' : ''}`} aria-label="Abrir metrônomo" onClick={() => setMetro(!metro)}><SlidersHorizontal /></button></header>
     <div className="reader-tools">
       <div className="segmented"><button className={mode === 'pages' ? 'active' : ''} onClick={() => setMode('pages')}><Columns2 size={16} />Por página</button><button className={mode === 'cascade' ? 'active' : ''} onClick={() => setMode('cascade')}><Rows3 size={16} />Contínua</button></div>
       <div className="pen-tools"><button className={`button small ${pen ? 'primary' : 'ghost'}`} onClick={() => { setPen(!pen); setTextTool(false); }} aria-pressed={pen}><PenLine size={16} />Caneta</button>{pen && <>
-        <div className="pen-colors">{['#5367de', '#e36959', '#263247'].map(c => <button key={c} aria-label={`Cor ${c}`} style={{ background: c }} className={color === c ? 'active' : ''} onClick={() => setColor(c)} />)}</div>
+        <label className="pen-width">Traço<select aria-label="Espessura da caneta" value={penWidth} onChange={event=>setPenWidth(Number(event.target.value))}><option value={1.5}>Fino</option><option value={2.5}>Médio</option><option value={4}>Grosso</option></select></label><div className="pen-colors">{['#5367de', '#e36959', '#263247'].map(c => <button key={c} aria-label={`Cor ${c}`} style={{ background: c }} className={color === c ? 'active' : ''} onClick={() => setColor(c)} />)}</div>
         <button className="icon-button" aria-label="Desfazer último traço" disabled={!annotations[page]?.length} onClick={() => updateInk(page, annotations[page].slice(0, -1))}><Undo2 size={17} /></button>
         <button className="icon-button" aria-label="Apagar rabiscos desta página" disabled={!annotations[page]?.length} onClick={() => updateInk(page, [])}><Eraser size={17} /></button>
       </>}</div>
@@ -228,7 +239,8 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
       {textTool && <p className="text-mode-hint">Toque na folha para inserir. Arraste uma cifra para mover ou toque nela para editar.</p>}
     </div>
     {metro && <Metronome bpm={bpm} onBpm={setBpm} onClose={() => setMetro(false)} />}
-    <div className={`reader-scroll ${mode}`} style={{ touchAction: mode === 'pages' && zoom <= 100 ? 'pan-y' : 'auto' }} ref={scroll} onPointerDown={e => {
+    <div className={`reader-scroll ${mode}`} style={{ touchAction: pen ? 'none' : mode === 'pages' && zoom <= 100 ? 'pan-y' : 'auto' }} ref={scroll} onPointerDown={e => {
+      if (('ontouchstart' in window && e.pointerType !== 'mouse')) return;
       if (e.isPrimary && e.button === 0 && !pen && !textTool) swipe.current = { x: e.clientX, y: e.clientY, time: performance.now(), scrollX: e.currentTarget.scrollLeft, scrollY: e.currentTarget.scrollTop, id: e.pointerId };
       else swipe.current = null;
     }} onPointerCancel={() => { swipe.current = null; }} onPointerUp={e => {
@@ -248,8 +260,8 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
       const pages = scroll.current.querySelectorAll<HTMLElement>('[data-page]');
       for (const element of pages) { const bounds = element.getBoundingClientRect(); if (bounds.bottom > containerTop + 100) { setPage(Number(element.dataset.page)); break; } }
     }}>
-      {error ? <div className="reader-error"><h2>Não foi possível abrir a partitura</h2><p>{error}</p><button className="button primary" onClick={() => void close()}>Voltar ao repertório</button></div> : !pdf ? <div className="reader-error"><LoaderCircle className="spin" /><p>Abrindo partitura…</p></div> : <div className="pages-container" style={{ width: Math.max(dimensions.width, pageWidth) }}>{(mode === 'pages' ? [page] : Array.from({ length: count }, (_, i) => i + 1)).map(number => <section key={number} style={{ width: pageWidth, maxWidth: 'none' }}>
-        <PdfPage pdf={pdf} number={number} pen={pen} color={color} zoom={zoom} strokes={annotations[number] ?? []} onChange={strokes => updateInk(number, strokes)}
+      {error ? <div className="reader-error"><h2>Não foi possível abrir a partitura</h2><p>{error}</p><button className="button primary" onClick={() => void close()}>Voltar ao repertório</button></div> : !pdf ? <div className="reader-error"><LoaderCircle className="spin" /><p>Abrindo partitura…</p></div> : <div className="pages-container" style={{ width: Math.max(dimensions.width, pageWidth) }}>{(mode === 'pages' ? [page] : Array.from({ length: count }, (_, i) => i + 1)).map(number => <section key={mode === 'pages' ? 'paged-sheet' : number} style={{ width: pageWidth, maxWidth: 'none' }}>
+        <PdfPage pdf={pdf} number={number} pen={pen} color={color} penWidth={penWidth} zoom={zoom} strokes={annotations[number] ?? []} onChange={strokes => updateInk(number, strokes)}
           notes={annotations.texts?.[number] ?? []} textTool={textTool}
           onCreateNote={position => setEditing({ number, isNew: true, note: { id: crypto.randomUUID(), kind: 'text', text: '', color: noteColor, fontSize: noteSize, position } })}
           onEditNote={note => setEditing({ number, note, isNew: false })} onMoveNote={note => updateNote(number, note)} />

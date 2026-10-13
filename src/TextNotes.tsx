@@ -17,7 +17,7 @@ function Mark({ note, active, pageWidth, ratio, onEdit, onMove }: {
     onKeyDown={event => { if (active && ['Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); onEdit(note); } }}
     onPointerDown={event => {
       if (!active || !event.isPrimary || event.button !== 0) return;
-      event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
+      event.stopPropagation(); event.preventDefault(); try {event.currentTarget.setPointerCapture?.(event.pointerId);} catch {/* Safari SVG capture can be unavailable. */}
       drag.current = { client: { x: event.clientX, y: event.clientY }, position: note.position, next: note.position, moved: false };
     }} onPointerMove={event => {
       const start = drag.current; if (!start) return;

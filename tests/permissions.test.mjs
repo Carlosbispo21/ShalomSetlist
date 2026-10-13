@@ -38,6 +38,8 @@ test('permissões de múltiplos responsáveis no PostgreSQL', async t => {
   const migration = await readFile(new URL('../supabase/migrations/20261010_multiple_directors.sql',import.meta.url),'utf8');
   await db.exec(migration);
   await db.exec(migration); // Atualização também suporta nova execução.
+  const accessMigration = await readFile(new URL('../supabase/migrations/20261013_director_access.sql',import.meta.url),'utf8');
+  await db.exec(accessMigration); await db.exec(accessMigration);
   async function actAs(id, anon = false) {
     await db.exec('reset role');
     await db.query("select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claims',$2,false)",[id,JSON.stringify({is_anonymous:anon})]);
@@ -74,7 +76,7 @@ test('permissões de múltiplos responsáveis no PostgreSQL', async t => {
   await t.test('músico não pode enviar, se promover ou editar seu papel diretamente',async () => {
     await actAs(musician);
     await assert.rejects(db.query('insert into public.scores values($1,$2,$3,$4)',['cccccccc-cccc-4ccc-8ccc-cccccccccccc',band,week,'Teste']),/row-level security/);
-    await assert.rejects(db.query('select public.grant_shalom_director($1)',['musician@example.test']),/Acesso restrito/);
+    await assert.rejects(db.query('select public.grant_shalom_director($1)',['musician@example.test']),/Somente responsáveis/);
     await assert.rejects(db.query("update public.members set role='director' where user_id=$1",[musician]),/permission denied/);
     await assert.rejects(db.query('select * from public.list_shalom_directors()'),/Acesso restrito/);
   });
@@ -85,8 +87,8 @@ test('permissões de múltiplos responsáveis no PostgreSQL', async t => {
   });
   await t.test('convite não promove contas anônimas nem contas de outra banda',async () => {
     await actAs(owner);
-    await assert.rejects(db.query('select public.grant_shalom_director($1)',['outsider@example.test']),/precisa entrar nesta banda/);
-    await assert.rejects(db.query('select public.grant_shalom_director($1)',['anonymous@example.test']),/precisa entrar nesta banda/);
+    await assert.rejects(db.query('select public.grant_shalom_director($1)',['outsider@example.test']),/outra banda/);
+    await assert.rejects(db.query('select public.grant_shalom_director($1)',['anonymous@example.test']),/Conta não encontrada/);
     await actAs(anonymous,true);
     await assert.rejects(db.query('select public.create_shalom_room($1)',['Banda indevida']),/e-mail e senha/);
   });
@@ -99,6 +101,20 @@ test('permissões de múltiplos responsáveis no PostgreSQL', async t => {
     await actAs(second);
     assert.equal((await db.query('select public.is_shalom_director($1) as allowed',[band])).rows[0].allowed,false);
     await assert.rejects(db.query('insert into public.scores values($1,$2,$3,$4)',['cccccccc-cccc-4ccc-8ccc-cccccccccccc',band,week,'Teste']),/row-level security/);
+  });
+  await t.test('liberação por e-mail associa conta criada sem exigir entrada prévia e lista músicos',async()=>{
+    await db.exec('reset role');
+    const created='66666666-6666-4666-8666-666666666666';
+    await db.query('insert into auth.users(id,email,is_anonymous) values($1,$2,false)',[created,'created@example.test']);
+    await actAs(owner);
+    await db.query('select public.grant_shalom_director($1)',[' CREATED@example.test ']);
+    const directory=(await db.query('select * from public.list_shalom_members()')).rows;
+    assert.equal(directory.find(member=>member.user_id===created).role,'director');
+    assert.equal(directory.find(member=>member.user_id===musician).role,'musician');
+    await actAs(created);
+    assert.equal((await db.query('select public.is_shalom_director($1) as allowed',[band])).rows[0].allowed,true);
+    await actAs(musician);
+    await assert.rejects(db.query('select * from public.list_shalom_members()'),/Somente responsáveis/);
   });
   await db.close();
 });

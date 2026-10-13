@@ -1,9 +1,10 @@
-import { defineConfig } from 'vite';
+import { defineConfig, transformWithEsbuild } from 'vite';
 import react from '@vitejs/plugin-react';
+import legacy from '@vitejs/plugin-legacy';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-  plugins: [react(), VitePWA({
+  plugins: [react(), legacy({targets:['ios >= 12','safari >= 12'],modernTargets:['ios >= 12','safari >= 12'],modernPolyfills:true}), VitePWA({
     registerType: 'prompt',
     includeAssets: ['icon.svg', 'apple-touch-icon.png'],
     manifest: {
@@ -20,5 +21,6 @@ export default defineConfig({
       navigateFallbackDenylist: [/^\/api/], cleanupOutdatedCaches: true }
   })],
   build: { rollupOptions: { output: { manualChunks: { 'pdf-reader': ['pdfjs-dist/legacy/build/pdf.mjs'], 'pdf-tools': ['pdf-lib'] } } } },
+  worker:{format:'iife',plugins:()=>[{name:'safari12-pdf-worker',enforce:'post',renderChunk:async code=>(await transformWithEsbuild(code,'pdf-worker.js',{target:'es2018'})).code}]},
   server: { port: 5173 }
 });

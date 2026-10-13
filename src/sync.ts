@@ -43,6 +43,11 @@ export async function loginDirector(email: string, password: string, signup: boo
   return getRoom();
 }
 export type Director = { user_id: string; email: string; is_owner: boolean };
+export type BandMember = Director & {role:'director'|'musician';is_anonymous:boolean};
+export async function listBandMembers():Promise<BandMember[]> {
+  const {data,error}=await requireCloud().rpc('list_shalom_members');
+  if (error) throw error; return data ?? [];
+}
 export async function listDirectors(): Promise<Director[]> {
   const { data, error } = await requireCloud().rpc('list_shalom_directors');
   if (error) throw error; return data ?? [];

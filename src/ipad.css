@@ -1,0 +1,5 @@
+/* Safari 12: layout does not depend on aspect-ratio, flex gap or dvh. */
+.reader{height:100vh;height:100dvh}.pdf-page>canvas{height:auto}.ink-layer.drawing{touch-action:none;-webkit-user-select:none;user-select:none}.pen-width{display:flex;align-items:center;gap:5px;font-size:10px;color:#4f5b5e}.pen-width select{background:#fff;border:1px solid #d8e1e1;border-radius:10px;font-size:11px;padding:5px;min-height:30px}.director-row>div{min-width:0}.director-row strong{overflow-wrap:anywhere}.director-row .button{margin-left:auto;flex-shrink:0}
+@supports not (height:100dvh){.app-shell{min-height:100vh}.reader{height:100vh}.note-editor{max-height:85vh}.modal{max-height:85vh}}
+.legacy-touch .reader-tools{flex-wrap:wrap}.legacy-touch .mobile-nav>button{margin:0 2px}.legacy-touch .button svg{margin-right:5px}.legacy-touch .reader-title{flex:1}.legacy-touch .reader-header>.icon-button{margin-left:8px}
+@media(max-width:650px){.pen-width{font-size:9px}.pen-width select{font-size:10px}.director-row{flex-wrap:wrap}.director-row .button{margin-left:43px}.reader-tools{flex-wrap:wrap}}

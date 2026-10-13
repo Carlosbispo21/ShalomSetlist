@@ -4,7 +4,7 @@ test('folha usa todo o visor, toque lateral troca página e hino do mesmo dia', 
   await page.goto('/');
   await page.getByRole('button', { name: 'Explorar com exemplos' }).click();
   // O filtro não deve interromper a sequência dos hinos do dia.
-  await page.getByRole('button', { name: 'Grupo de louvor', exact: true }).click();
+  await page.getByRole('button', { name: 'Crianças', exact: true }).click();
   await page.getByRole('button', { name: /^Exemplo 01/ }).click();
   await expect(page.getByLabel('Partitura, página 1')).toBeVisible();
   const viewport = page.viewportSize()!;

@@ -1,5 +1,14 @@
 # Alterações
 
+## 0.3.4
+
+- Compilação e alternativas de APIs para Safari/iOS 12, com worker PDF clássico.
+- Desenho por toque no iPad, espessura de caneta e armazenamento de PDFs como bytes para evitar falhas do Safari.
+- Deslizar páginas sem desmontar a folha, renderização em buffer e preparo das páginas próximas.
+- Ordem fixa dos seis grupos no repertório e na sequência de leitura.
+- Lista de contas para liberar responsáveis com um toque; liberação por e-mail sem exigir entrada prévia.
+- Suporte a Page Up/Page Down para pedais que funcionam como teclado.
+
 ## 0.3.3
 
 - Marca exibida no canto superior esquerdo, identificação da banda junto ao status e crédito Carlos Bispo no rodapé.

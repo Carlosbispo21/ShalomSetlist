@@ -30,8 +30,8 @@ export async function makeDemoPdf(title: string) {
 }
 export async function loadDemo() {
   const names: [string, Group, Score['day']][] = [
-    ['Exemplo 01', 'Grupo de louvor', 'saturday'],
-    ['Exemplo 02', 'Crianças', 'saturday'],
+    ['Exemplo 01', 'Crianças', 'saturday'],
+    ['Exemplo 02', 'Grupo de louvor', 'saturday'],
     ['Exemplo 03', 'Jovens', 'sunday']
   ];
   for (const [position, [title, group, day]] of names.entries()) {
