@@ -2,7 +2,7 @@
 
 O Cloudflare Pages hospeda a interface do app. As contas, o repertório e os PDFs ficam no seu Supabase. Pelo GitHub, configure a URL e a chave **pública** nas variáveis de build do Cloudflare, conforme abaixo. Os APKs e o ZIP já compilados neste computador incluem essa configuração.
 
-Guia revisado para a versão **0.3.6**. Use o fluxo pelo GitHub para publicar a web automaticamente.
+Guia revisado para a versão **0.3.7**. Use o fluxo pelo GitHub para publicar a web automaticamente.
 
 ## Publicar pelo GitHub no Cloudflare Pages
 
@@ -100,6 +100,8 @@ A versão 0.3.2 inclui partituras permanentes por grupo. Consulte [GUIA_FESTIVID
 ## Compartilhamento
 
 Consulte [GUIA_COMPARTILHAMENTO.md](GUIA_COMPARTILHAMENTO.md) para compartilhar a banda e PDFs. A importação do Google Drive foi implementada no APK pelo seletor Android. O seletor próprio do Drive na web ficou para uma etapa futura.
+
+A busca automática das partituras a partir da mensagem semanal é uma integração separada: consulte [GUIA_AUTOMACAO.md](GUIA_AUTOMACAO.md). Ela usa uma Pages Function publicada pelo GitHub e um Apps Script na conta que acessa a pasta. Configure os segredos `SHALOM_DRIVE_*` somente no servidor; eles nunca entram em `.env` com prefixo `VITE_`. Sem essa configuração, o leitor e o envio manual continuam funcionando, e a busca automática informa que a conexão ainda precisa ser ativada.
 
 ## Propagação do aviso Android
 

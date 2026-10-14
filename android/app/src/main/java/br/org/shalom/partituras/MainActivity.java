@@ -3,6 +3,7 @@ package br.org.shalom.partituras;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
 import android.os.Bundle;
+import android.content.Intent;
 import android.webkit.WebView;
 import androidx.activity.OnBackPressedCallback;
 
@@ -11,7 +12,9 @@ public class MainActivity extends BridgeActivity {
     @Override public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ReaderDisplayPlugin.class);
         registerPlugin(ScoreFilesPlugin.class);
+        registerPlugin(ProgramsPlugin.class);
         super.onCreate(savedInstanceState);
+        acceptProgram(getIntent());
         // Versões antigas tinham um service worker. Retira apenas o registro
         // dele, preservando login, PDFs e anotações, mesmo se ele servir HTML antigo.
         bridge.setWebViewClient(new BridgeWebViewClient(bridge) {
@@ -29,5 +32,12 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         });
+    }
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);acceptProgram(intent);}
+    private void acceptProgram(Intent intent){
+        if(intent!=null&&Intent.ACTION_SEND.equals(intent.getAction())&&"text/plain".equals(intent.getType())){
+            CharSequence text=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+            if(text!=null){ProgramsPlugin.store(this,text.toString());if(bridge!=null)bridge.getWebView().post(()->bridge.getWebView().evaluateJavascript("window.dispatchEvent(new Event('shalom-program-received'))",null));}
+        }
     }
 }

@@ -13,9 +13,11 @@ import { nativeAndroid, readerDisplay } from './native';
 import { shareInvitation, shareCancelled } from './sharing';
 import { importDrivePdfs } from './driveImport';
 import { Share2, HardDrive } from 'lucide-react';
+import ProgramImport from './ProgramImport';
+import {programs} from './native';
 
 type View = 'week' | 'library' | 'festivity' | 'band' | 'settings';
-type Modal = 'upload' | 'connect' | null;
+type Modal = 'upload' | 'connect' | 'program' | null;
 const navigation = [ { id: 'week' as View, title: 'Repertório', icon: CalendarDays }, { id: 'festivity' as View, title: 'Festividade', icon: PartyPopper }, { id: 'library' as View, title: 'Partituras', icon: BookOpen }, { id: 'band' as View, title: 'Nossa banda', icon: Users }, { id: 'settings' as View, title: 'Ajustes', icon: Settings2 } ];
 const groupClass = (group: Group) => `group-${GROUPS.indexOf(group)}`;
 
@@ -130,6 +132,14 @@ function RemoveFestivity({ score, onClose, onRemoved }: { score: Score; onClose:
 }
 
 export default function App() {
+  const [programText,setProgramText]=useState(()=>localStorage.getItem('shalom-program-draft')??'');
+  useEffect(()=>{
+    if(!nativeAndroid)return;
+    const receive=async()=>{try{const {text}=await programs.pending();if(text){setProgramText(text);localStorage.setItem('shalom-program-draft',text);await programs.clear({text});}}catch{/* Not all previous APKs have this plugin. */}};
+    void receive();window.addEventListener('focus',receive);window.addEventListener('shalom-program-received',receive);
+    const timer=setInterval(()=>{if(document.visibilityState==='visible')void receive();},15000);
+    return()=>{clearInterval(timer);window.removeEventListener('focus',receive);window.removeEventListener('shalom-program-received',receive);};
+  },[]);
   const [view, setView] = useState<View>('week'), [modal, setModal] = useState<Modal>(null), [reader, setReader] = useState<Score | null>(null);
   const [scores, setScores] = useState<Score[]>([]), [room, setRoom] = useState<Room | null>(() => {
     if (!cloud) return null;
@@ -238,6 +248,7 @@ export default function App() {
         {appUpdate && <div className="app-update"><span>Nova versão disponível.{nativeAndroid ? ' Baixe o APK e confirme a instalação.' : ''}</span><button className="button small primary" onClick={() => void updateApp(true).catch(() => notify('Não foi possível abrir a atualização. Tente novamente.'))}>Atualizar aplicativo</button></div>}
         {view === 'week' || view === 'library' ? <>
           <div className="page-heading"><div><h1>{view === 'week' ? 'Repertório' : 'Partituras'}</h1><p>{view === 'week' ? 'Partituras de sábado e domingo.' : 'PDFs do repertório atual.'}</p></div>{canEdit && <button className="button primary upload-main" onClick={() => setModal('upload')}><Plus size={19} />{room ? 'Enviar partituras' : 'Adicionar partituras'}</button>}</div>
+          {view==='week'&&room?.role==='director'&&<div className="program-entry"><p>{programText?'Programação recebida. Confira os PDFs e os dias.':'Importe os hinos a partir da mensagem da programação.'}</p><button className="button ghost" onClick={()=>setModal('program')}><HardDrive size={17}/>Importar programação</button></div>}
           {view === 'week' && <section className="week-hero"><div className="summary-glow" aria-hidden="true" /><div className="hero-copy"><span className="hero-tag"><CalendarDays size={16} />Semana atual</span><h2>{formatDate(saturday, { day: '2-digit' })} e {formatDate(sunday, { day: '2-digit', month: 'long' })}</h2><div className="summary-total"><strong>{visibleScores.length.toString().padStart(2,'0')}</strong><span>{visibleScores.length === 1 ? 'partitura' : 'partituras'}</span></div><div className="hero-facts"><span><Users size={15} />6 grupos</span><span><Check size={15} />{visibleScores.filter(s => cached.has(s.id)).length} no aparelho</span></div></div><div className="summary-days"><span><i>SÁB</i><strong>{formatDate(saturday, { day: '2-digit' })}</strong><small>{visibleScores.filter(s => s.day === 'saturday').length} hinos</small></span><span><i>DOM</i><strong>{formatDate(sunday, { day: '2-digit' })}</strong><small>{visibleScores.filter(s => s.day === 'sunday').length} hinos</small></span></div></section>}
           {demo && <div className="demo-banner"><Sparkles size={17} /><span>Você está explorando partituras de exemplo.</span><button onClick={() => void endDemo()}>Limpar exemplos<X size={14} /></button></div>}
           <div className="repertoire-heading"><div><h2>{view === 'week' ? 'Hinos da semana' : 'Hinos'}</h2><p>{view === 'week' ? 'Selecione o dia e o grupo.' : 'Os PDFs com ✓ já estão salvos no aparelho.'}</p></div><label className="search"><Search size={17} /><input aria-label="Buscar hino" placeholder="Buscar hino…" value={query} onChange={e => setQuery(e.target.value)} />{query && <button className="icon-button" aria-label="Limpar busca" onClick={() => setQuery('')}><X size={14} /></button>}</label></div>
@@ -263,6 +274,7 @@ export default function App() {
       </main></div><nav className="mobile-nav" aria-label="Navegação principal">{navigation.map(({ id, title, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => setView(id)}><Icon size={21} /><span>{id === 'band' ? 'Banda' : title}</span></button>)}</nav>
     </div>}
     {modal === 'connect' && <Connect onClose={() => setModal(null)} onConnected={connected => { setRoom(connected); setModal(null); setView('band'); notify('Aparelho conectado à banda.'); }} />}
+    {modal==='program'&&room?.role==='director'&&<ProgramImport room={room} existing={bandScores} initialText={programText} onPublished={()=>void reload()} onClose={()=>{setProgramText(localStorage.getItem('shalom-program-draft')??'');setModal(null);}} onSaved={()=>{setModal(null);setProgramText(localStorage.getItem('shalom-program-draft')??'');setExpanded(new Set(['saturday','sunday']));void reload();notify('Programação enviada para a banda.');}}/>}
     {modal === 'upload' && <Upload room={room} scope={view === 'festivity' ? 'festivity' : 'weekly'} initialGroup={view === 'festivity' ? festivityGroup : 'Grupo de louvor'} position={Math.max(0, ...bandScores.map(s => s.position + 1))} onClose={() => setModal(null)} onSaved={group => { setModal(null); if (view === 'festivity') setFestivityGroup(group); setExpanded(new Set(['saturday', 'sunday'])); void reload(); notify(room ? 'Partituras enviadas para a banda.' : 'Partituras salvas neste aparelho.'); }} />}
     {deletingFestivity && <RemoveFestivity score={deletingFestivity} onClose={() => setDeletingFestivity(null)} onRemoved={() => { setDeletingFestivity(null); void reload(); notify('Partitura removida da festividade.'); }} />}
     {toast && <div className="toast" role="status"><Info size={18} /><span>{toast}</span><button className="icon-button" aria-label="Fechar aviso" onClick={() => setToast('')}><X size={16} /></button></div>}

@@ -1,5 +1,14 @@
 # Alterações
 
+## 0.3.7
+
+- Importação da programação pelo texto recebido, com grupos, intérpretes e escolha de sábado, domingo ou ambos.
+- Avulsos no Drive corresponde a Grupo de louvor; Mocidade corresponde a Jovens.
+- Busca direcionada por hino em subpastas do Drive, com metadados paginados pela Drive API e escolha de versões ambíguas.
+- Versões escolhidas são lembradas neste aparelho; envio parcial pode continuar sem repetir os hinos concluídos.
+- APK recebe texto por Compartilhar e oferece leitura opcional de notificações do WhatsApp para guardar rascunhos, sem publicação automática ou interrupção do leitor.
+- Ponte Google Apps Script somente leitura, restrita à pasta configurada, protegida por segredo no servidor e por acesso dos responsáveis da banda.
+
 ## 0.3.6
 
 - Troca lateral de folhas com acompanhamento do dedo, retorno de gestos curtos e respeito à redução de movimento.
