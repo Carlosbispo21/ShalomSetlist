@@ -7,7 +7,7 @@ import {publishScore} from './sync';
 import {MAX_PDF_BYTES,weekKey,type Room,type Score} from './domain';
 import {nativeAndroid} from './native';
 
-export default function ProgramImport({room,existing,initialText,onClose,onSaved,onPublished}:{room:Room;existing:Score[];initialText:string;onClose:()=>void;onSaved:()=>void;onPublished:()=>void}) {
+export default function ProgramImport({room,existing,initialText,onClose,onSaved,onPublished}:{room:Room;existing:Score[];initialText:string;onClose:()=>void;onSaved:(pending:number)=>void;onPublished:()=>void}) {
   const [text,setText]=useState(initialText),[rows,setRows]=useState<ProgramSong[]>([]),[files,setFiles]=useState<DrivePdf[]>([]),[selected,setSelected]=useState<Record<string,string>>({});
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[progress,setProgress]=useState(''),[defaultDay,setDefaultDay]=useState<ProgramDay>('');
   const [completed,setCompleted]=useState<Set<string>>(new Set()),[ids]=useState<Record<string,string>>({});
@@ -23,12 +23,14 @@ export default function ProgramImport({room,existing,initialText,onClose,onSaved
   }
   function days(song:ProgramSong){return selectedDays(song.day||defaultDay);}
   function already(song:ProgramSong,file:DrivePdf,day:string){return existing.some(score=>score.scope!=='festivity'&&score.week===weekKey()&&score.day===day&&score.group===song.group&&score.filename===file.name);}
-  const missing=rows.some(song=>!selected[song.id]||!days(song).length);
+  const selectedRows=rows.filter(song=>files.some(file=>file.id===selected[song.id]));
+  const pendingRows=rows.filter(song=>!selectedRows.includes(song));
+  const missingDay=selectedRows.some(song=>!days(song).length);
   async function send() {
-    if(busy||missing||!rows.length)return;setBusy(true);setError('');
+    if(busy||missingDay||!selectedRows.length)return;setBusy(true);setError('');
     const sent=new Set(completed);let count=0;
     try{
-      for(const song of rows){
+      for(const song of selectedRows){
         const file=files.find(file=>file.id===selected[song.id]);if(!file)throw new Error(`Escolha o PDF de ${song.title}.`);
         const destinations=days(song).filter(day=>!sent.has(`${song.id}:${day}`)&&!already(song,file,day));if(!destinations.length)continue;
         setProgress(`Baixando ${song.title}…`);const pdf=await driveFile(file.id);
@@ -41,7 +43,7 @@ export default function ProgramImport({room,existing,initialText,onClose,onSaved
           await publishScore(score,pdf,room);sent.add(key);setCompleted(new Set(sent));count++;localStorage.setItem(choicesKey,JSON.stringify({...choices(),[songKey(song)]:file.id}));onPublished();
         }
       }
-      if(localStorage.getItem('shalom-program-draft')===text)localStorage.removeItem('shalom-program-draft');onSaved();
+      if(!pendingRows.length&&localStorage.getItem('shalom-program-draft')===text)localStorage.removeItem('shalom-program-draft');onSaved(pendingRows.length);
     }catch(error){setError(`${error instanceof Error?error.message:'Não foi possível enviar a programação.'}${count?' Os hinos já enviados serão preservados; tente novamente os restantes.':''}`);}
     finally{setBusy(false);setProgress('');}
   }
@@ -58,10 +60,12 @@ export default function ProgramImport({room,existing,initialText,onClose,onSaved
         <label>PDF<select aria-label={`PDF de ${song.title}`} disabled={busy||Boolean(done)} value={selected[song.id]??''} onChange={event=>setSelected({...selected,[song.id]:event.target.value})}><option value="">{matches.length?'Escolha a versão':'Nenhum PDF correspondente'}</option>{matches.map(({file})=><option value={file.id} key={file.id}>{file.path}</option>)}</select></label>
         <label>Dia<select aria-label={`Dia de ${song.title}`} value={song.day} disabled={busy||Boolean(done)} onChange={event=>setRows(rows.map(row=>row.id===song.id?{...row,day:event.target.value as ProgramDay}:row))}><option value="">Usar escolha acima</option><option value="saturday">Sábado</option><option value="sunday">Domingo</option><option value="both">Sábado e domingo</option></select></label>
         {done&&<p>Já está no repertório.</p>}
+        {!file&&!busy&&<p>Pendente: será deixado para adicionar depois.</p>}
       </div>;
     })}</div>}
+    {rows.length>0&&!busy&&<p className="program-choice-note" role="status">{selectedRows.length} {selectedRows.length===1?'hino com PDF selecionado':'hinos com PDF selecionado'}.{pendingRows.length>0&&<> Pendentes: {pendingRows.map(song=>song.title).join(', ')}. Você pode enviar os selecionados e adicionar os demais depois.</>}{missingDay&&<> Escolha o dia dos hinos selecionados para enviar.</>}</p>}
     {error&&<p className="form-error" role="alert">{error}</p>}
-    <button className="button primary full" disabled={busy||missing||!rows.length||!files.length} onClick={()=>void send()}>{busy?<LoaderCircle className="spin" size={17}/>:<UploadCloud size={17}/>} {progress||'Enviar programação para a banda'}</button>
+    <button className="button primary full" disabled={busy||missingDay||!selectedRows.length} onClick={()=>void send()}>{busy?<LoaderCircle className="spin" size={17}/>:<UploadCloud size={17}/>} {progress||'Enviar programação para a banda'}</button>
     <details className="program-setup"><summary>Conectar a pasta do Drive</summary><p>A configuração é feita uma vez por um responsável. <a target="_blank" rel="noreferrer" href="https://github.com/Carlosbispo21/ShalomSetlist/blob/main/GUIA_AUTOMACAO.md">Abrir passo a passo</a></p><label>Identificador da banda<input aria-label="Identificador da banda para integração" readOnly value={room.id}/></label></details>
     {nativeAndroid&&<div className="program-notifications"><strong>Programações do WhatsApp</strong><p>Copie e cole a mensagem aqui ou use Compartilhar → Shalom quando essa opção estiver disponível no WhatsApp.</p></div>}
   </div></div>;

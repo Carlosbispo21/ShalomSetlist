@@ -1,5 +1,11 @@
 # Alterações
 
+## 0.3.9
+
+- Permite importar as partituras selecionadas mesmo quando outros hinos não foram encontrados ou ficaram sem versão escolhida.
+- Mostra os hinos pendentes, preserva a mensagem para completar depois e mantém a proteção contra reenvio de partituras já cadastradas.
+- Continua exigindo o dia dos hinos selecionados e pelo menos um PDF para enviar.
+
 ## 0.3.8
 
 - Remove o serviço de leitura de notificações e sua permissão sensível, que pode bloquear a instalação pelo Google Play Protect.

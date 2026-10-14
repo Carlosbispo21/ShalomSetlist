@@ -4,7 +4,7 @@ const base='https://vzccxwihuhcjydyjrzym.supabase.co',id='11111111-1111-4111-811
 const message='A paz a todos, segue programação do final de semana!\nAdolescentes:\nEu Creio - Sarah Beatriz\nMocidade:\nEm Tua Presença - Diante do Trono\nVarões:\nVisitando um Amigo - Canção e Louvor\nIrmãs:\nEsse Adorador - Shirley Carvalhaes\nGrupo de louvor:\nMeu Deus é Grande';
 const names=['Eu Creio - Sarah Beatriz','Em Tua Presença - Diante do Trono','Visitando um Amigo - Canção e Louvor','Esse Adorador - Shirley Carvalhaes','Meu Deus é Grande'];
 const groups=['Adolescentes','Jovens','Varões','Irmãs','Grupo de louvor'];
-async function mock(page:Page,ambiguous=false,failSecond=false){
+async function mock(page:Page,ambiguous=false,failSecond=false,missing:number[]=[]){
   const pdf=await PDFDocument.create();pdf.addPage();const bytes=Buffer.from(await pdf.save());
   const rows:Record<string,unknown>[]=[],downloads:string[]=[];let attempts=0;
   await page.routeWebSocket('wss://vzccxwihuhcjydyjrzym.supabase.co/**',ws=>ws.close());
@@ -21,7 +21,7 @@ async function mock(page:Page,ambiguous=false,failSecond=false){
   await page.route('**/api/drive',async route=>{
     const input=route.request().postDataJSON();
     if(input.action==='file'){downloads.push(input.id);return route.fulfill({contentType:'application/json',body:JSON.stringify({name:`${names[Number(input.id.slice(-1))]}.pdf`,base64:bytes.toString('base64')})});}
-    const files=names.map((name,i)=>({id:`drive-file-${i}`,name:`${name}.pdf`,path:`shalom/${i===4?'Avulsos':i===1?'Mocidade':groups[i]}/${name}/PDF/${name}.pdf`,group:groups[i],aliases:[name],size:bytes.length}));
+    const files=names.map((name,i)=>({id:`drive-file-${i}`,name:`${name}.pdf`,path:`shalom/${i===4?'Avulsos':i===1?'Mocidade':groups[i]}/${name}/PDF/${name}.pdf`,group:groups[i],aliases:[name],size:bytes.length})).filter((_,i)=>!missing.includes(i));
     if(ambiguous)files.push({...files[0],id:'drive-alternate-0',path:'shalom/Adolescentes/Eu Creio/Outra versão.pdf'});
     return route.fulfill({contentType:'application/json',body:JSON.stringify({files})});
   });
@@ -43,9 +43,36 @@ test('mensagem seleciona os PDFs, exige dia e publica ambos sem duplicar importa
 });
 test('duas versões exigem escolha e falha parcial permite continuar sem repetir o primeiro hino',async({page})=>{
   const calls=await mock(page,true,true);await page.goto('/');await page.getByRole('button',{name:'Importar programação',exact:true}).click();await page.getByLabel('Mensagem da programação').fill(message);await page.getByLabel('Dia da programação',{exact:true}).selectOption('sunday');await page.getByRole('button',{name:'Buscar PDFs no Drive'}).click();
-  await expect(page.getByLabel('PDF de Eu Creio')).toHaveValue('');await expect(page.getByRole('button',{name:'Enviar programação para a banda'})).toBeDisabled();await page.getByLabel('PDF de Eu Creio').selectOption('drive-file-0');await page.getByRole('button',{name:'Enviar programação para a banda'}).click();
+  await expect(page.getByLabel('PDF de Eu Creio')).toHaveValue('');await expect(page.getByRole('button',{name:'Enviar programação para a banda'})).toBeEnabled();await page.getByLabel('PDF de Eu Creio').selectOption('drive-file-0');await page.getByRole('button',{name:'Enviar programação para a banda'}).click();
   await expect(page.getByRole('alert')).toContainText('hinos já enviados serão preservados');expect(calls.rows).toHaveLength(1);await page.getByRole('button',{name:'Enviar programação para a banda'}).click();await expect(page.getByRole('dialog',{name:'Importar programação'})).toHaveCount(0);expect(calls.rows).toHaveLength(5);expect(calls.rows.filter(row=>row.title==='Eu Creio')).toHaveLength(1);
   await page.getByRole('button',{name:'Importar programação',exact:true}).click();await page.getByLabel('Mensagem da programação').fill(message);await page.getByRole('button',{name:'Buscar PDFs no Drive'}).click();await expect(page.getByLabel('PDF de Eu Creio')).toHaveValue('drive-file-0');
+});
+
+test('envia os PDFs encontrados, preserva pendências e não duplica os hinos ao tentar novamente',async({page})=>{
+  const calls=await mock(page,false,false,[1,4]);await page.goto('/');await page.getByRole('button',{name:'Importar programação',exact:true}).click();
+  await page.getByLabel('Mensagem da programação').fill(message);await page.getByRole('button',{name:'Buscar PDFs no Drive'}).click();
+  await expect(page.getByRole('status')).toContainText('Pendentes: Em Tua Presença, Meu Deus é Grande');
+  await expect(page.getByRole('button',{name:'Enviar programação para a banda'})).toBeDisabled();
+  await page.getByLabel('Dia da programação',{exact:true}).selectOption('saturday');
+  // The missing PDF's day cannot block the selected PDFs.
+  await page.getByLabel('Dia de Em Tua Presença',{exact:true}).selectOption('sunday');
+  await expect(page.getByRole('button',{name:'Enviar programação para a banda'})).toBeEnabled();
+  await page.getByRole('button',{name:'Enviar programação para a banda'}).click();await expect(page.getByRole('dialog',{name:'Importar programação'})).toHaveCount(0);
+  expect(calls.rows).toHaveLength(3);expect(calls.downloads).toEqual(['drive-file-0','drive-file-2','drive-file-3']);
+  expect(calls.rows.every(row=>row.day==='saturday')).toBe(true);
+  await expect(page.getByText('Partituras enviadas. 2 hinos pendentes para adicionar depois.')).toBeVisible();
+  expect(await page.evaluate(()=>localStorage.getItem('shalom-program-draft'))).toBe(message);
+  await page.getByRole('button',{name:'Importar programação',exact:true}).click();await expect(page.getByLabel('Mensagem da programação')).toHaveValue(message);
+  await page.getByLabel('Dia da programação',{exact:true}).selectOption('saturday');await page.getByRole('button',{name:'Buscar PDFs no Drive'}).click();
+  await page.getByRole('button',{name:'Enviar programação para a banda'}).click();await expect(page.getByRole('dialog',{name:'Importar programação'})).toHaveCount(0);
+  expect(calls.rows).toHaveLength(3);expect(calls.downloads).toHaveLength(3);
+});
+
+test('não envia quando nenhum PDF foi encontrado ou selecionado',async({page})=>{
+  const calls=await mock(page,false,false,[0,1,2,3,4]);await page.goto('/');await page.getByRole('button',{name:'Importar programação',exact:true}).click();
+  await page.getByLabel('Mensagem da programação').fill(message);await page.getByLabel('Dia da programação',{exact:true}).selectOption('both');await page.getByRole('button',{name:'Buscar PDFs no Drive'}).click();
+  await expect(page.getByRole('status')).toContainText('0 hinos com PDF selecionado');
+  await expect(page.getByRole('button',{name:'Enviar programação para a banda'})).toBeDisabled();expect(calls.rows).toHaveLength(0);expect(calls.downloads).toHaveLength(0);
 });
 test('APK recebe texto compartilhado e preserva a programação nova enquanto envia a anterior',async({page})=>{
   const calls=await mock(page);

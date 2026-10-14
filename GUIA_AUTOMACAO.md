@@ -45,7 +45,9 @@ Toque em **Buscar PDFs no Drive**. Nomes de arquivo e das pastas do hino entram 
 
 A busca lista nomes em blocos de até mil itens pela Drive API e só entra nas pastas dos hinos solicitados ou em contêineres como PDF, Hinos e Partituras. Pastas de músicas não solicitadas ficam fora da varredura. Use até 50 hinos por importação. Se as pastas das músicas tiverem códigos ou outros nomes que não contenham o título, ajuste esses nomes ou forneça exemplos para adaptar a busca.
 
-O envio acrescenta os hinos ao repertório atual; não apaga os anteriores. PDFs já cadastrados com o mesmo nome de arquivo, grupo, semana e dia são preservados sem novo envio. Se uma transferência falhar, os hinos concluídos permanecem e o botão tenta os restantes.
+Você pode enviar os PDFs selecionados mesmo quando a busca não encontrar todos os hinos. A tela indica os pendentes, que podem ser adicionados depois pelo envio manual de PDF ou por outra busca no Drive. Escolha o dia dos hinos selecionados; os que estiverem sem PDF não bloqueiam o envio. Se nenhum PDF estiver selecionado, o botão permanece desativado. Uma versão ambígua continua exigindo sua escolha para ser enviada.
+
+O envio acrescenta os hinos ao repertório atual; não apaga os anteriores. PDFs já cadastrados com o mesmo nome de arquivo, grupo, semana e dia são preservados sem novo envio. Se uma transferência falhar, os hinos concluídos permanecem e o botão tenta os restantes. Quando há pendências, a mensagem fica salva neste aparelho para consulta ou nova tentativa; os hinos já cadastrados são reconhecidos ao buscar novamente.
 
 A versão escolhida de cada hino fica lembrada neste aparelho e nesta banda. Nas próximas consultas, ela é selecionada se ainda fizer parte dos resultados correspondentes. Outro responsável ou outro aparelho poderá precisar escolher sua versão.
 
