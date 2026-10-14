@@ -1,5 +1,11 @@
 # Alterações
 
+## 0.3.8
+
+- Remove o serviço de leitura de notificações e sua permissão sensível, que pode bloquear a instalação pelo Google Play Protect.
+- Programação continua disponível por copiar/colar e Compartilhar → Shalom, com busca no Drive e envio após revisão.
+- O APK não oferece mais recebimento automático de mensagens em segundo plano.
+
 ## 0.3.7
 
 - Importação da programação pelo texto recebido, com grupos, intérpretes e escolha de sábado, domingo ou ambos.

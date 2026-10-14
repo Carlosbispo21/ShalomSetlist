@@ -1,11 +1,11 @@
 import {useState} from 'react';
 import {PDFDocument} from 'pdf-lib';
-import {X,LoaderCircle,UploadCloud,Search,Settings2} from 'lucide-react';
+import {X,LoaderCircle,UploadCloud,Search} from 'lucide-react';
 import {parseProgram,automaticPdf,matchPdfs,selectedDays,normalized,type ProgramSong,type ProgramDay,type DrivePdf} from './program';
 import {driveCatalog,driveFile} from './programDrive';
 import {publishScore} from './sync';
 import {MAX_PDF_BYTES,weekKey,type Room,type Score} from './domain';
-import {nativeAndroid,programs} from './native';
+import {nativeAndroid} from './native';
 
 export default function ProgramImport({room,existing,initialText,onClose,onSaved,onPublished}:{room:Room;existing:Score[];initialText:string;onClose:()=>void;onSaved:()=>void;onPublished:()=>void}) {
   const [text,setText]=useState(initialText),[rows,setRows]=useState<ProgramSong[]>([]),[files,setFiles]=useState<DrivePdf[]>([]),[selected,setSelected]=useState<Record<string,string>>({});
@@ -63,6 +63,6 @@ export default function ProgramImport({room,existing,initialText,onClose,onSaved
     {error&&<p className="form-error" role="alert">{error}</p>}
     <button className="button primary full" disabled={busy||missing||!rows.length||!files.length} onClick={()=>void send()}>{busy?<LoaderCircle className="spin" size={17}/>:<UploadCloud size={17}/>} {progress||'Enviar programação para a banda'}</button>
     <details className="program-setup"><summary>Conectar a pasta do Drive</summary><p>A configuração é feita uma vez por um responsável. <a target="_blank" rel="noreferrer" href="https://github.com/Carlosbispo21/ShalomSetlist/blob/main/GUIA_AUTOMACAO.md">Abrir passo a passo</a></p><label>Identificador da banda<input aria-label="Identificador da banda para integração" readOnly value={room.id}/></label></details>
-    {nativeAndroid&&<div className="program-notifications"><strong>Receber programações do WhatsApp</strong><p>Opcional: ative o acesso às notificações no Android. O app identifica textos de programação recebidos pelo WhatsApp e guarda um rascunho neste celular para sua revisão. Não lê o histórico das conversas nem envia os hinos sozinho. Se a notificação vier incompleta, use Compartilhar → Shalom ou cole a mensagem.</p><button className="button ghost full" onClick={()=>void programs.settings().catch(()=>setError('Abra Ajustes do Android → Acesso às notificações.'))}><Settings2 size={16}/>Configurar recebimento automático</button></div>}
+    {nativeAndroid&&<div className="program-notifications"><strong>Programações do WhatsApp</strong><p>Copie e cole a mensagem aqui ou use Compartilhar → Shalom quando essa opção estiver disponível no WhatsApp.</p></div>}
   </div></div>;
 }

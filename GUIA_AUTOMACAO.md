@@ -52,12 +52,12 @@ A versão escolhida de cada hino fica lembrada neste aparelho e nesta banda. Nas
 ## WhatsApp no APK
 
 - **Compartilhar → Shalom:** selecione a mensagem no WhatsApp e compartilhe seu texto com o app. Se o WhatsApp não oferecer o compartilhamento externo desse texto, copie e cole em Importar programação.
-- **Recebimento por notificações:** em Importar programação, use **Configurar recebimento automático** e ative a permissão do Shalom nos ajustes do Android. O Android concede acesso às notificações; o código filtra WhatsApp/WhatsApp Business e guarda apenas textos com formato de programação, sem ler histórico ou guardar contatos. Desative a permissão nesses mesmos ajustes para parar.
-- O recebimento guarda um rascunho neste celular e não interrompe a partitura aberta. Confira os dias e PDFs antes de enviar. Notificações ocultas, silenciadas, truncadas ou bloqueadas pelo sistema podem não conter o texto necessário; nesses casos use Compartilhar ou copiar/colar.
-- No Safari/iPad, use copiar/colar. O acesso às notificações do WhatsApp é uma função do APK Android.
+- A partir da **0.3.8**, o APK não solicita acesso às notificações e não recebe mensagens do WhatsApp em segundo plano. Esse acesso foi retirado porque a proteção do Google pode bloquear APKs baixados pela internet que o declarem. Use Compartilhar ou copiar/colar para trazer a mensagem ao app.
+- O compartilhamento guarda um rascunho neste celular para revisão. Confira os dias e PDFs antes de enviar.
+- No Safari/iPad, use copiar/colar.
 
 ## Custos e validação
 
-A solução usa Apps Script, Cloudflare e o Supabase existente, respeitando as cotas dos planos gratuitos. Não usa IA paga nem a API comercial do WhatsApp. Os testes locais cobrem leitura da mensagem, subpastas e controle de acesso. A leitura da pasta real e o comportamento das notificações precisam ser confirmados depois da configuração nas contas e no celular.
+A solução usa Apps Script, Cloudflare e o Supabase existente, respeitando as cotas dos planos gratuitos. Não usa IA paga nem a API comercial do WhatsApp. Os testes locais cobrem leitura da mensagem, subpastas, compartilhamento e controle de acesso. O teste no Google encontrou dez PDFs para os cinco hinos de exemplo. O envio real pelo app precisa ser confirmado depois da configuração no Cloudflare.
 
-Referências: [Apps Script Web Apps](https://developers.google.com/apps-script/guides/web), [cotas do Apps Script](https://developers.google.com/apps-script/guides/services/quotas), [variáveis das Pages Functions](https://developers.cloudflare.com/pages/functions/bindings/) e [NotificationListenerService Android](https://developer.android.com/reference/android/service/notification/NotificationListenerService).
+Referências: [Apps Script Web Apps](https://developers.google.com/apps-script/guides/web), [cotas do Apps Script](https://developers.google.com/apps-script/guides/services/quotas), [variáveis das Pages Functions](https://developers.cloudflare.com/pages/functions/bindings/) e [orientações do Google sobre bloqueios pelo Play Protect](https://developers.google.com/android/play-protect/warning-dev-guidance).

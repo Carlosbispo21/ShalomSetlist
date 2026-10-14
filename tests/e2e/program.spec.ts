@@ -53,8 +53,8 @@ test('APK recebe texto compartilhado e preserva a programação nova enquanto en
     const win=window as unknown as typeof window & {androidBridge:object;Capacitor:object;pendingProgram:string;programCalls:{method:string;options:Record<string,unknown>}[]};
     win.androidBridge={};win.pendingProgram=message;win.programCalls=[];
     const methods=(names:string[])=>names.map(name=>({name,rtype:'promise'}));
-    win.Capacitor={PluginHeaders:[{name:'Programs',methods:methods(['pending','clear','settings','status'])}],nativePromise:(plugin:string,method:string,options:Record<string,unknown>)=>{
-      if(plugin==='Programs'){win.programCalls.push({method,options});if(method==='pending')return Promise.resolve({text:win.pendingProgram});if(method==='clear'&&options.text===win.pendingProgram)win.pendingProgram='';if(method==='status')return Promise.resolve({enabled:true});}
+    win.Capacitor={PluginHeaders:[{name:'Programs',methods:methods(['pending','clear'])}],nativePromise:(plugin:string,method:string,options:Record<string,unknown>)=>{
+      if(plugin==='Programs'){win.programCalls.push({method,options});if(method==='pending')return Promise.resolve({text:win.pendingProgram});if(method==='clear'&&options.text===win.pendingProgram)win.pendingProgram='';}
       return Promise.resolve({});
     }};
   },{message});
@@ -65,6 +65,7 @@ test('APK recebe texto compartilhado e preserva a programação nova enquanto en
   await expect.poll(()=>page.evaluate(()=>localStorage.getItem('shalom-program-draft'))).toBe(latest);await expect(page.getByLabel('Mensagem da programação')).toHaveValue(message);
   await page.getByRole('button',{name:'Enviar programação para a banda'}).click();await expect(page.getByRole('dialog',{name:'Importar programação'})).toHaveCount(0);expect(calls.rows).toHaveLength(5);
   await page.getByRole('button',{name:'Importar programação',exact:true}).click();await expect(page.getByLabel('Mensagem da programação')).toHaveValue(latest);
-  await page.getByRole('button',{name:'Configurar recebimento automático'}).click();
-  expect(await page.evaluate(()=>(window as unknown as {programCalls:{method:string}[]}).programCalls.some(call=>call.method==='settings'))).toBe(true);
+  await expect(page.getByText('Copie e cole a mensagem aqui ou use Compartilhar → Shalom')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Configurar recebimento automático'})).toHaveCount(0);
+  expect(await page.evaluate(()=>(window as unknown as {programCalls:{method:string}[]}).programCalls.some(call=>call.method==='settings'||call.method==='status'))).toBe(false);
 });

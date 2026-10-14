@@ -2,7 +2,7 @@
 
 O Cloudflare Pages hospeda a interface do app. As contas, o repertório e os PDFs ficam no seu Supabase. Pelo GitHub, configure a URL e a chave **pública** nas variáveis de build do Cloudflare, conforme abaixo. Os APKs e o ZIP já compilados neste computador incluem essa configuração.
 
-Guia revisado para a versão **0.3.7**. Use o fluxo pelo GitHub para publicar a web automaticamente.
+Guia revisado para a versão **0.3.8**. Use o fluxo pelo GitHub para publicar a web automaticamente.
 
 ## Publicar pelo GitHub no Cloudflare Pages
 
