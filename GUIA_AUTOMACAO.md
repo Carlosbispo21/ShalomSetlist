@@ -60,6 +60,8 @@ A versão escolhida de cada hino fica lembrada neste aparelho e nesta banda. Nas
 
 ## Custos e validação
 
+Para conferir nomes, caminhos e formatos do acervo, use a ferramenta separada descrita em [GUIA_ORGANIZACAO_DRIVE.md](GUIA_ORGANIZACAO_DRIVE.md). A conferência é somente leitura; não substitua o projeto Google usado pela importação.
+
 A solução usa Apps Script, Cloudflare e o Supabase existente, respeitando as cotas dos planos gratuitos. Não usa IA paga nem a API comercial do WhatsApp. Os testes locais cobrem leitura da mensagem, subpastas, compartilhamento e controle de acesso. O teste no Google encontrou dez PDFs para os cinco hinos de exemplo. O envio real pelo app precisa ser confirmado depois da configuração no Cloudflare.
 
 Referências: [Apps Script Web Apps](https://developers.google.com/apps-script/guides/web), [cotas do Apps Script](https://developers.google.com/apps-script/guides/services/quotas), [variáveis das Pages Functions](https://developers.cloudflare.com/pages/functions/bindings/) e [orientações do Google sobre bloqueios pelo Play Protect](https://developers.google.com/android/play-protect/warning-dev-guidance).

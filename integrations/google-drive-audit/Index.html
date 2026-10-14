@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR"><head><base target="_blank"><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8">
+<style>
+body{font:15px system-ui,sans-serif;color:#253235;background:#f5f7f8;margin:0;padding:24px}main{max-width:1200px;margin:auto}h1{font-size:25px}p{line-height:1.6}button,select,input{font:inherit;padding:10px;border:1px solid #d5dddf;border-radius:10px;background:white;color:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:default}.actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}.panel{background:white;border-radius:15px;border:1px solid #dde4e6;padding:18px;margin-top:18px}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:12px}th,td{padding:12px;text-align:left;border-bottom:1px solid #e5eaec;vertical-align:top}td:first-child{min-width:230px;overflow-wrap:anywhere}td:last-child{min-width:240px}#error{color:#a13333}small{color:#647176}label{display:inline-block}#search{min-width:220px}
+</style></head><body><main>
+<h1>Conferir acervo</h1>
+<p>Relatório de nomes, estrutura, PDFs, imagens e possíveis cópias. Esta ferramenta tem acesso de leitura e não altera os arquivos do Drive.</p>
+<div class="actions"><button id="start" disabled>Iniciar conferência</button><button id="pause" disabled>Pausar</button><button id="download" disabled>Baixar relatório e progresso</button><label>Retomar relatório <input id="restore" type="file" accept="application/json,.json" disabled></label></div>
+<p id="status" role="status">Carregando configuração…</p><p id="error" role="alert"></p>
+<div class="panel"><div class="actions"><select id="filter" aria-label="Filtrar arquivos"><option value="all">Todos</option><option value="issues">Com observações</option><option value="PDF">PDFs</option><option value="Imagem">Imagens</option><option value="copies">Possíveis cópias</option></select><input id="search" placeholder="Buscar nome ou caminho" aria-label="Buscar nome ou caminho"></div>
+<small>Tipo conforme os metadados do Drive; o conteúdo e as páginas ainda precisam ser validados. Cópias indicam o mesmo checksum, sem exclusão automática. Nomes sugeridos exigem revisão, especialmente quando existem várias versões.</small>
+<p id="counts"></p><div class="table-wrap"><table><thead><tr><th>Caminho atual</th><th>Tipo</th><th>Nome sugerido</th><th>Observações</th></tr></thead><tbody id="rows"></tbody></table></div></div>
+</main><script>
+let state=null,root='',running=false,paused=false;
+const $=id=>document.getElementById(id);
+const call=(name,...args)=>new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args));
+function duplicates(){const hashes=new Map();for(const file of state.files){if(!file.md5)continue;const key=file.md5+':'+file.size;hashes.set(key,(hashes.get(key)||0)+1);}return hashes;}
+function render(){
+  if(!state)return;const hashes=duplicates(),term=$('search').value.toLocaleLowerCase(),filter=$('filter').value;
+  const files=state.files.filter(file=>{const copy=file.md5&&(hashes.get(file.md5+':'+file.size)||0)>1;return (!term||file.path.toLocaleLowerCase().includes(term))&&(filter==='all'||filter==='issues'&&(file.issues.length||copy)||filter===file.type||filter==='copies'&&copy);});
+  $('rows').replaceChildren();
+  for(const file of files.slice(0,300)){const tr=document.createElement('tr'),copy=file.md5&&(hashes.get(file.md5+':'+file.size)||0)>1;
+    for(const value of [file.path,file.type,file.suggestedName,[...file.issues,...(copy?['Possível cópia: conteúdo com checksum igual']:[])].join('; ')]){const td=document.createElement('td');td.textContent=value;tr.append(td);}$('rows').append(tr);}
+  $('counts').textContent=files.length+' arquivos neste filtro. Mostrando até 300; o relatório baixado contém todos.';
+  const counts={};for(const file of state.files)counts[file.type]=(counts[file.type]||0)+1;
+  $('status').textContent=(state.queue.length?'Conferência '+(running?'em andamento':'pausada')+'. ':'Conferência concluída. ')+state.pages+' lotes lidos; '+state.files.length+' arquivos: '+Object.entries(counts).map(([type,count])=>count+' '+type).join(', ')+'. '+state.queue.length+' pastas na fila.';
+  $('start').textContent=state.queue.length?'Continuar conferência':'Nova conferência';$('start').disabled=running;$('pause').disabled=!running;$('download').disabled=!state.files.length&&!state.pages;$('restore').disabled=running;
+}
+function download(){const report={...state,duplicateContent:[...duplicates()].filter(([,count])=>count>1).map(([checksum,count])=>({checksum,count}))};const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='conferencia-shalom.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}
+async function run(){
+  if(running)return;
+  if(!state||!state.queue.length)state={version:1,root,startedAt:new Date().toISOString(),queue:[{id:root,token:''}],seen:{[root]:true},files:[],pages:0};
+  running=true;paused=false;$('error').textContent='';render();
+  try{while(state.queue.length&&!paused){const item=state.queue[0],result=await call('auditPage',item.id,item.token);
+    const existing=new Set(state.files.map(file=>file.id));for(const file of result.files)if(!existing.has(file.id)){existing.add(file.id);state.files.push(file);}
+    if(result.nextPageToken)item.token=result.nextPageToken;else state.queue.shift();
+    for(const folder of result.folders)if(!state.seen[folder.id]){state.seen[folder.id]=true;state.queue.push({id:folder.id,token:''});}
+    state.pages++;render();
+  }}catch(error){$('error').textContent=String(error.message||error)+' Baixe o progresso e tente continuar. Se uma pasta ficou inacessível, revise sua permissão no Drive.';}
+  finally{running=false;render();}
+}
+$('start').onclick=()=>void run();$('pause').onclick=()=>{paused=true;$('pause').disabled=true;};$('download').onclick=download;$('filter').onchange=render;$('search').oninput=render;
+$('restore').onchange=async event=>{try{const file=event.target.files[0];if(!file)return;if(file.size>50*1024*1024)throw new Error('Relatório maior que 50 MB.');const value=JSON.parse(await file.text());if(value.version!==1||value.root!==root||!Array.isArray(value.queue)||!Array.isArray(value.files)||!value.seen||!value.queue.every(item=>typeof item.id==='string')||!value.files.every(item=>typeof item.path==='string'&&Array.isArray(item.issues)))throw new Error('Relatório inválido ou de outra pasta.');state=value;$('error').textContent='';render();}catch(error){$('error').textContent=error.message||String(error);}};
+window.addEventListener('beforeunload',event=>{if(running){event.preventDefault();event.returnValue='';}});
+call('auditConfig').then(config=>{root=config.root;$('start').disabled=false;$('restore').disabled=false;$('status').textContent='Pronto para conferir a pasta shalom e suas subpastas.';}).catch(error=>{$('error').textContent=error.message||String(error);});
+</script></body></html>
