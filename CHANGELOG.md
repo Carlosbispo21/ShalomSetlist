@@ -1,5 +1,13 @@
 # Alterações
 
+## 0.3.10
+
+- Remove o modo responsável da interface: todos que entram pelo código da banda podem enviar hinos e importar a programação, sem liberação por e-mail.
+- Entrada por conta usa uma banda existente por padrão; criar outra banda exige uma escolha explícita. As permissões atuais de exclusão foram preservadas.
+- Botão Recarregar dentro da partitura: busca uma nova cópia sem cache quando há conexão, reabre a cópia local offline e preserva página e anotações.
+- Recupera automaticamente PDFs locais corrompidos pela rede. Limita a memória dos canvases e libera os recursos ao fechar ou recarregar, para reduzir falhas de leitura nos iPads.
+- Banco existente: executar `supabase/migrations/20261018_member_uploads.sql` antes de disponibilizar o novo app. Apps Script não precisa ser alterado; publicar também a função `/api/drive` atualizada.
+
 ## 0.3.9
 
 - Permite importar as partituras selecionadas mesmo quando outros hinos não foram encontrados ou ficaram sem versão escolhida.

@@ -51,14 +51,11 @@ Documentação oficial: [Direct Upload do Cloudflare Pages](https://developers.c
 
 No **Safari**, abra a URL HTTPS publicada. Use **Compartilhar → Adicionar à Tela de Início** e abra o app pelo ícone. Conecte à banda e espere os indicadores de download antes de testar sem internet.
 
-## Mais de um responsável
+## Envio por qualquer membro
 
-1. O primeiro responsável cria a banda pelo app.
-2. A outra pessoa abre **Banda → Conectar à banda → Sou responsável**, marca **Entrar em uma banda existente**, informa o código e cria sua conta com e-mail e senha, ou entra em uma conta que já tenha.
-3. Um responsável já autorizado abre **Banda → Responsáveis** e adiciona o e-mail dessa conta.
-4. No aparelho dessa pessoa, toque em **Atualizar repertório**. A permissão também é atualizada automaticamente com a sincronização.
+Na versão 0.3.10, basta entrar em **Conectar à banda → Pelo código**. Todos os membros podem enviar hinos e importar programação; não há liberação por e-mail. Uma nova banda só é criada ao escolher **Com minha conta → Criar uma nova banda**.
 
-Todos os responsáveis podem enviar/remover hinos e gerenciar responsáveis. O criador da banda não pode ser rebaixado por essa tela. Remover a permissão de alguém mantém a conta como músico. O código da banda permite receber partituras, mas não dá permissão de responsável.
+Antes de publicar, execute `supabase/migrations/20261018_member_uploads.sql` no banco existente. Publique também `functions/api/drive.js` junto ao app. A migração preserva contas, bandas, PDFs e as permissões atuais de exclusão.
 
 ## Atualizações
 

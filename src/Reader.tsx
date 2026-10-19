@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {openPdf,pdfDeadline} from './pdfEngine';
 import { useInk } from './useInk';
-import { renderPage } from './pageRaster';
-import { ArrowLeft, ChevronLeft, ChevronRight, Columns2, Rows3, PenLine, Undo2, Eraser, Minus, Plus, Play, Pause, X, SlidersHorizontal, LoaderCircle, Check, Maximize, Type } from 'lucide-react';
+import { renderPage, releaseRasters, pruneRasters, resetRasters } from './pageRaster';
+import { ArrowLeft, ChevronLeft, ChevronRight, Columns2, Rows3, PenLine, Undo2, Eraser, Minus, Plus, Play, Pause, X, SlidersHorizontal, LoaderCircle, Check, Maximize, Type, RefreshCw } from 'lucide-react';
 import { getAnnotations, saveAnnotations } from './db';
 import { downloadPdf } from './sync';
 import { validBpm, isFestivity, type Annotations, type Score, type Stroke, type TextNote, type Point } from './domain';
@@ -48,6 +48,7 @@ function PdfPage({ pdf, number, strokes, onChange, onReady, pen, color, penWidth
         // on every turn or resize notification. Neighbour canvases stay mounted.
         const output=raster.canvas;output.setAttribute('aria-label',`Partitura, página ${number}`);
         if(canvasHost.current.firstChild!==output){while(canvasHost.current.firstChild)canvasHost.current.removeChild(canvasHost.current.firstChild);canvasHost.current.appendChild(output);}
+        pruneRasters(pdf);
         setOriginalWidth(raster.width);setRatio(raster.ratio);setReady(true);setRenderedNumber(number);
         onReady(number);
       }catch(error){if(!disposed&&id===request){setRenderedNumber(0);setPageError(error instanceof Error?error.message:'Não foi possível preparar esta página.');}}
@@ -101,6 +102,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
 }) {
   const [pdf, setPdf] = useState<pdfjs.PDFDocumentProxy | null>(null), [error, setError] = useState('');
   const [loadAttempt,setLoadAttempt]=useState(0);
+  const [rasterAttempt,setRasterAttempt]=useState(0);
   const [readyPages,setReadyPages]=useState<Set<number>>(new Set());
   const markReady=useCallback((number:number)=>setReadyPages(previous=>previous.has(number)?previous:new Set(previous).add(number)),[]);
   const [sharedFile, setSharedFile] = useState<File | null>(null), [sharing, setSharing] = useState(false);
@@ -113,6 +115,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   }
   const [mode, setMode] = useState<'pages' | 'cascade'>(() => localStorage.getItem('shalom-reader-mode') === 'cascade' ? 'cascade' : 'pages');
   const [page, setPage] = useState(initialPage), [pen, setPen] = useState(false), [color, setColor] = useState('#5367de');
+  const pageRef = useRef(page); pageRef.current = page;
   const [penWidth,setPenWidth]=useState(2.5);
   const [textTool, setTextTool] = useState(false), [editing, setEditing] = useState<{ number: number; note: TextNote; isNew: boolean } | null>(null);
   const [noteSize, setNoteSize] = useState(16), [noteColor, setNoteColor] = useState('#20282a');
@@ -129,7 +132,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   }, []);
   useEffect(() => {
     let disposed = false;
-    if (pdf) void pdf.getPage(page).then(p => { if (!disposed) { const viewport = p.getViewport({ scale: 1 }); setRatio(viewport.height / viewport.width); } });
+    if (pdf) void pdf.getPage(page).then(p => { if (!disposed) { const viewport = p.getViewport({ scale: 1 }); setRatio(viewport.height / viewport.width); } }).catch(()=>{});
     return () => { disposed = true; };
   }, [pdf, page]);
   useEffect(() => {
@@ -137,14 +140,27 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
     const load = async () => {
       setError('');setPdf(null);setSharedFile(null);setReadyPages(new Set());
       try {
-        const [blob, ink] = await pdfDeadline(Promise.all([downloadPdf(score), getAnnotations(score.id)]),30000,'O PDF demorou para baixar. Confira a conexão e tente novamente.');
-        const bytes = new Uint8Array(await pdfDeadline(blob.arrayBuffer(),15000,'Não foi possível ler o arquivo salvo. Tente abrir novamente.'));
+        const targetPage=loadAttempt ? pageRef.current : initialPage;
+        await saveQueue.current;
+        const [blob, ink] = await pdfDeadline(Promise.all([downloadPdf(score,loadAttempt>0), getAnnotations(score.id)]),30000,'O PDF demorou para baixar. Confira a conexão e recarregue a partitura.');
+        let bytes = new Uint8Array(await pdfDeadline(blob.arrayBuffer(),15000,'Não foi possível ler o arquivo salvo. Recarregue a partitura.'));
         if(disposed)return;
-        const session=await openPdf(bytes),loaded=session.document;
-        closePdf=session.dispose;
+        let session;
+        try { session=await openPdf(bytes); }
+        catch(firstError) {
+          // A damaged offline copy gets one automatic attempt from the server.
+          if(loadAttempt||!score.storagePath||!navigator.onLine)throw firstError;
+          const fresh=await pdfDeadline(downloadPdf(score,true),30000,'Não foi possível baixar uma nova cópia. Recarregue a partitura.');
+          bytes=new Uint8Array(await fresh.arrayBuffer());
+          if(disposed)return;
+          session=await openPdf(bytes);
+        }
+        const loaded=session.document;
+        closePdf=async()=>{releaseRasters(loaded);await session.dispose();};
         if (disposed) { await closePdf(); return; }
-        setSharedFile(new File([blob],pdfFilename(score.filename || score.title),{type:'application/pdf'}));
-        inkRef.current = ink; setAnnotations(ink); setPage(Math.min(initialPage, loaded.numPages)); setPdf(loaded);
+        setSharedFile(new File([bytes],pdfFilename(score.filename || score.title),{type:'application/pdf'}));
+        if(!dirty.current){inkRef.current = ink; setAnnotations(ink);}
+        setPage(Math.min(targetPage, loaded.numPages)); setPdf(loaded);
       } catch(error) { if (!disposed) setError(error instanceof Error?error.message:'Não foi possível abrir o PDF. Tente novamente.'); }
     };
     void load();
@@ -156,6 +172,16 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
     window.document.addEventListener('visibilitychange', visibility);
     return () => { disposed = true; void closePdf?.().catch(()=>{}); void wake?.release(); window.document.removeEventListener('visibilitychange', visibility); };
   }, [score.id,loadAttempt]);
+  function reloadPartitura() {
+    if(editing)return;
+    setControls(true);setPen(false);setTextTool(false);slide.settle();
+    if(!navigator.onLine&&pdf){
+      // Keep the live parser/worker: starting another one could require a
+      // script that Safari has not cached yet, even though the PDF is local.
+      resetRasters(pdf);setReadyPages(new Set());setRasterAttempt(value=>value+1);
+    }else setLoadAttempt(value=>value+1);
+    notify(navigator.onLine&&score.storagePath ? 'Buscando uma nova cópia da partitura…' : 'Reabrindo o PDF salvo neste aparelho…');
+  }
   useEffect(() => { localStorage.setItem('shalom-reader-mode', mode); }, [mode]);
   function updateInk(number: number, strokes: Stroke[]) {
     const next = { ...inkRef.current, [number]: strokes };
@@ -255,7 +281,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
   },[]);
   const pageWidth = (mode === 'pages' ? Math.min(dimensions.width, dimensions.height / ratio) : dimensions.width) * zoom / 100;
   return <div className={`reader immersive ${controls ? '' : 'controls-hidden'}`}>
-    <header className="reader-header"><button className="icon-button back" aria-label="Voltar ao repertório" onClick={() => void close()}><ArrowLeft /></button><div className="reader-title"><h1>{score.title}</h1><p>{score.group}{isFestivity(score) ? ' · Festividade' : ''}{score.demo ? ' · Exemplo' : ''}</p></div><span className="reader-offline"><Check size={14} />{pdf ? 'No aparelho' : 'Carregando'}</span><button className="icon-button" aria-label="Compartilhar PDF" title="Compartilhar PDF original, sem anotações" disabled={!sharedFile || sharing} onClick={() => void share()}>{sharing ? <LoaderCircle className="spin" size={19} /> : <Share2 size={19} />}</button>{!nativeAndroid && document.fullscreenEnabled && <button className="icon-button" aria-label="Alternar tela cheia" onClick={() => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => notify('Tela cheia indisponível neste navegador.'))}><Maximize size={19} /></button>}<button className={`icon-button ${metro ? 'selected' : ''}`} aria-label="Abrir metrônomo" onClick={() => setMetro(!metro)}><SlidersHorizontal /></button></header>
+    <header className="reader-header"><button className="icon-button back" aria-label="Voltar ao repertório" onClick={() => void close()}><ArrowLeft /></button><div className="reader-title"><h1>{score.title}</h1><p>{score.group}{isFestivity(score) ? ' · Festividade' : ''}{score.demo ? ' · Exemplo' : ''}</p></div><span className="reader-offline"><Check size={14} />{pdf ? 'No aparelho' : 'Carregando'}</span><button className="button small ghost reload-score" aria-label="Recarregar partitura" title="Baixar uma nova cópia e reabrir sem apagar anotações" disabled={!!editing} onClick={reloadPartitura}><RefreshCw size={18}/><span>Recarregar</span></button><button className="icon-button" aria-label="Compartilhar PDF" title="Compartilhar PDF original, sem anotações" disabled={!sharedFile || sharing} onClick={() => void share()}>{sharing ? <LoaderCircle className="spin" size={19} /> : <Share2 size={19} />}</button>{!nativeAndroid && document.fullscreenEnabled && <button className="icon-button" aria-label="Alternar tela cheia" onClick={() => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => notify('Tela cheia indisponível neste navegador.'))}><Maximize size={19} /></button>}<button className={`icon-button ${metro ? 'selected' : ''}`} aria-label="Abrir metrônomo" onClick={() => setMetro(!metro)}><SlidersHorizontal /></button></header>
     <div className="reader-tools">
       <div className="segmented"><button className={mode === 'pages' ? 'active' : ''} onClick={() => setMode('pages')}><Columns2 size={16} />Por página</button><button className={mode === 'cascade' ? 'active' : ''} onClick={() => setMode('cascade')}><Rows3 size={16} />Contínua</button></div>
       <div className="pen-tools"><button disabled={!pdf||!readyPages.has(page)} className={`button small ${pen ? 'primary' : 'ghost'}`} onClick={() => { setPen(!pen); setTextTool(false); }} aria-pressed={pen}><PenLine size={16} />Caneta</button>{pen && <>
@@ -295,7 +321,7 @@ export default function Reader({ score, initialPage = 1, onClose, onSong, previo
       const pages = scroll.current.querySelectorAll<HTMLElement>('[data-page]');
       for (const element of pages) { const bounds = element.getBoundingClientRect(); if (bounds.bottom > containerTop + 100) { setPage(Number(element.dataset.page)); break; } }
     }}>
-      {error ? <div className="reader-error"><h2>Não foi possível abrir a partitura</h2><p>{error}</p><button className="button primary" onClick={()=>setLoadAttempt(value=>value+1)}>Tentar abrir novamente</button><button className="button ghost" onClick={() => void close()}>Voltar ao repertório</button></div> : !pdf ? <div className="reader-error"><LoaderCircle className="spin" /><p>Abrindo partitura…</p></div> : <div ref={slide.stage} className={`pages-container ${mode==='pages'?'page-stage':''}`} style={{ width: Math.max(dimensions.width, pageWidth),...(mode==='pages'?{height:Math.max(dimensions.height,pageWidth*ratio)}:{}) }}>{(mode === 'pages' ? [page-1,page,page+1].filter(number=>number>=1&&number<=count) : Array.from({ length: count }, (_, i) => i + 1)).map(number => <section key={number} className={mode==='pages'?'page-pane':''} data-sheet={number} aria-hidden={mode==='pages'&&number!==page?true:undefined} style={mode==='pages'?{width:Math.max(dimensions.width,pageWidth),transform:`translate3d(${(number-page)*stageWidth}px,0,0)`,pointerEvents:number===page?'auto':'none'}:{width:pageWidth,maxWidth:'none'}}>
+      {error ? <div className="reader-error"><h2>Não foi possível abrir a partitura</h2><p>{error}</p><button className="button primary" onClick={reloadPartitura}>Tentar abrir novamente</button><button className="button ghost" onClick={() => void close()}>Voltar ao repertório</button></div> : !pdf ? <div className="reader-error"><LoaderCircle className="spin" /><p>Abrindo partitura…</p></div> : <div ref={slide.stage} className={`pages-container ${mode==='pages'?'page-stage':''}`} style={{ width: Math.max(dimensions.width, pageWidth),...(mode==='pages'?{height:Math.max(dimensions.height,pageWidth*ratio)}:{}) }}>{(mode === 'pages' ? [page-1,page,page+1].filter(number=>number>=1&&number<=count) : Array.from({ length: count }, (_, i) => i + 1)).map(number => <section key={`${rasterAttempt}:${number}`} className={mode==='pages'?'page-pane':''} data-sheet={number} aria-hidden={mode==='pages'&&number!==page?true:undefined} style={mode==='pages'?{width:Math.max(dimensions.width,pageWidth),transform:`translate3d(${(number-page)*stageWidth}px,0,0)`,pointerEvents:number===page?'auto':'none'}:{width:pageWidth,maxWidth:'none'}}>
         <div className="page-paper" style={{width:pageWidth}}><PdfPage pdf={pdf} number={number} pen={pen&&(mode==='cascade'||number===page)} color={color} penWidth={penWidth} zoom={zoom} active={mode==='cascade'||number===page} eager={mode==='pages'} enabled={mode==='cascade'||number===page||readyPages.has(page)} strokes={annotations[number] ?? []} onReady={markReady} onChange={strokes => updateInk(number, strokes)}
           notes={annotations.texts?.[number] ?? []} textTool={textTool&&(mode==='cascade'||number===page)}
           onCreateNote={position => setEditing({ number, isNew: true, note: { id: crypto.randomUUID(), kind: 'text', text: '', color: noteColor, fontSize: noteSize, position } })}

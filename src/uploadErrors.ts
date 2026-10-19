@@ -7,7 +7,7 @@ export function describeUploadError(stage: UploadStage, error: unknown): Error {
     return new Error(`Falha de conexão durante ${stage}. Não foi possível concluir a comunicação com o servidor. Tente novamente; se persistir, informe esta etapa.`);
   }
   if (/row.level security|permission denied|unauthorized|invalid jwt|jwt expired/i.test(message) || ['401','403','42501'].includes(status)) {
-    return new Error(`Sem autorização para ${stage}. Entre novamente com sua conta e confirme a permissão de responsável em Banda.`);
+    return new Error(`Sem autorização para ${stage}. Conecte este aparelho novamente pelo código da banda. Se continuar, as permissões de envio precisam ser atualizadas no servidor.`);
   }
   if (/bucket.*not found/i.test(message)) return new Error('O espaço de PDFs não foi encontrado no servidor. Verifique o bucket scores no Supabase.');
   return new Error(`Falha durante ${stage}: ${message}`);

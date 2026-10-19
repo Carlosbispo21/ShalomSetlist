@@ -1,6 +1,6 @@
 # iPad e leitura
 
-Versão 0.3.6: troca lateral com acompanhamento do dedo, folhas vizinhas prontas, marcadores e ajustes para reduzir o trabalho do Safari antigo.
+Versão 0.3.10: envio pelo código da banda, botão Recarregar, recuperação de PDF e menor uso de memória, além dos gestos, marcadores e ajustes para Safari antigo.
 
 Abra https://shalomsetlist.pages.dev/ no Safari. Aguarde a publicação concluir; quando houver aviso, atualize fora da partitura. Se o site antigo não abrir, feche a aba e abra o endereço novamente. Não apague os dados do site para atualizar: eles guardam PDFs e anotações locais.
 
@@ -20,11 +20,15 @@ Na barra flutuante, abra **Marcadores**, escreva um nome como “Refrão” ou �
 
 Os marcadores são pessoais e ficam neste aparelho, junto aos rabiscos e cifras; funcionam offline com o PDF já baixado. Não são enviados para os outros músicos. Não é necessária uma migração SQL.
 
-## Responsáveis
+## Recarregar quando a folha ficar em branco
 
-Em **Nossa banda**, use **Tornar responsável** ao lado do e-mail. Também pode preencher o e-mail de uma conta criada que ainda não entrou na banda; a liberação já a associa à banda. A pessoa precisa confirmar o e-mail se o Supabase exigir confirmação e entrar com sua própria conta. Quem entrou apenas pelo código usa uma conta temporária e precisa criar uma conta com e-mail para enviar partituras.
+Na versão 0.3.10, toque em **Recarregar** na barra superior da própria partitura. Com internet, baixa uma nova cópia ignorando o cache; offline, reinicia a leitura do PDF salvo. A página atual, os rabiscos, cifras e marcadores são preservados. Se a barra estiver escondida, use **Mostrar controles**.
 
-A migração `supabase/migrations/20261013_director_access.sql` já foi executada neste projeto. Contas que pertencem a outra banda precisam primeiro entrar nesta banda pelo código; a liberação não transfere contas silenciosamente.
+Uma cópia local inválida recebe uma tentativa automática de recuperação pela rede. O leitor limita o tamanho das imagens e libera os canvases ao fechar ou recarregar para reduzir o uso de memória. Esses ajustes precisam ser conferidos nos dois iPads reais; testes WebKit não reproduzem todas as limitações do iOS 12.
+
+## Enviar hinos
+
+Basta entrar em **Nossa banda → Conectar à banda → Pelo código**. Qualquer membro pode enviar hinos, sem cadastrar e-mail ou virar responsável. A regra exige a migração `supabase/migrations/20261018_member_uploads.sql` no servidor e a nova versão publicada.
 
 ## Ordem dos grupos
 

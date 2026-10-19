@@ -24,15 +24,15 @@ export async function joinRoom(code: string) {
   const { data: { session } } = await client.auth.getSession();
   if (!session) { const { error } = await client.auth.signInAnonymously(); if (error) throw new Error('Não foi possível conectar. Verifique se o login anônimo está ativado no Supabase.'); }
   const { error } = await client.rpc('join_shalom_room', { room_code: code.trim().toUpperCase() });
-  if (error) throw new Error('Código não encontrado ou conexão indisponível. Confira o código com o responsável.');
+  if (error) throw new Error('Não foi possível entrar nesta banda. Confira o código e a conexão.');
   return getRoom();
 }
-export async function loginDirector(email: string, password: string, signup: boolean, bandCode?: string) {
+export async function loginAccount(email: string, password: string, signup: boolean, bandCode?: string) {
   const client = requireCloud();
   if (signup) {
     const { data, error } = await client.auth.signUp({ email, password });
     if (error) throw error;
-    if (!data.session) throw new Error('Conta criada. Confirme o e-mail e depois entre como responsável.');
+    if (!data.session) throw new Error('Conta criada. Confirme o e-mail e depois entre com sua conta.');
   } else {
     const { error } = await client.auth.signInWithPassword({ email, password }); if (error) throw error;
   }
@@ -41,24 +41,6 @@ export async function loginDirector(email: string, password: string, signup: boo
   if (existing) return existing;
   const { error } = await client.rpc('create_shalom_room', { room_name: 'Banda Shalom' }); if (error) throw error;
   return getRoom();
-}
-export type Director = { user_id: string; email: string; is_owner: boolean };
-export type BandMember = Director & {role:'director'|'musician';is_anonymous:boolean};
-export async function listBandMembers():Promise<BandMember[]> {
-  const {data,error}=await requireCloud().rpc('list_shalom_members');
-  if (error) throw error; return data ?? [];
-}
-export async function listDirectors(): Promise<Director[]> {
-  const { data, error } = await requireCloud().rpc('list_shalom_directors');
-  if (error) throw error; return data ?? [];
-}
-export async function grantDirector(email: string) {
-  const { error } = await requireCloud().rpc('grant_shalom_director', { target_email: email.trim() });
-  if (error) throw error;
-}
-export async function removeDirector(userId: string) {
-  const { error } = await requireCloud().rpc('remove_shalom_director', { target_user: userId });
-  if (error) throw error;
 }
 export async function pullScores(room: Room) {
   const { data, error } = await requireCloud().from('scores').select('*').eq('room_id', room.id).or(`week.eq.${weekKey()},scope.eq.festivity`).order('position');
@@ -69,12 +51,15 @@ export async function pullScores(room: Room) {
   for (const score of scores) await saveScore(score);
   return scores;
 }
-export async function downloadPdf(score: Score) {
-  const cached = await getPdf(score.id); if (cached) return cached;
+export async function downloadPdf(score: Score, refresh = false) {
+  const cached = await getPdf(score.id);
+  if (cached && (!refresh || !navigator.onLine || !score.storagePath)) return cached;
   if (!score.storagePath) throw new Error('PDF não encontrado neste aparelho.');
-  const { data, error } = await requireCloud().storage.from('scores').download(score.storagePath);
+  const { data, error } = await requireCloud().storage.from('scores').download(score.storagePath, refresh ? { cacheNonce: String(Date.now()) } : {}, refresh ? { cache: 'no-store' } : undefined);
   if (error) throw new Error('Não foi possível baixar a partitura. Verifique sua conexão.');
-  await savePdf(score.id, data); return data;
+  // A full disk must not stop an otherwise successful online reading.
+  try { await savePdf(score.id, data); } catch { /* Keep the previous offline copy. */ }
+  return data;
 }
 export async function publishScore(score: Score, file: Blob, room: Room) {
   const client = requireCloud(), path = `${room.id}/${scoreFolder(score)}/${score.id}.pdf`;

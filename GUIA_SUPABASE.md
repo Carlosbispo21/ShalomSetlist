@@ -18,7 +18,7 @@ No menu do projeto, abra **SQL Editor → New query**. No computador, abra o arq
 
 Para a checagem externa de disponibilidade da versão 0.3.0, execute depois `supabase/migrations/20261010_app_releases_health.sql` em uma nova consulta. A configuração do agendamento está em `GUIA_DISPONIBILIDADE.md`.
 
-Isso cria a banda, os músicos, a lista de hinos e um espaço privado para PDFs. As regras permitem que os músicos leiam e que só o responsável envie/remova os hinos.
+Isso cria a banda, os músicos, a lista de hinos e um espaço privado para PDFs. As regras permitem que todos os membros leiam e enviem hinos na própria banda. As permissões anteriores de exclusão foram preservadas.
 
 ## 4. Liberar a entrada dos tablets
 
@@ -43,9 +43,9 @@ Referência oficial: [chaves de API do Supabase](https://supabase.com/docs/guide
 
 Depois de incluir a configuração e recompilar o app:
 
-1. No celular do responsável: **Nossa banda → Conectar à banda → Sou responsável**.
+1. Para criar a primeira banda: **Nossa banda → Conectar à banda → Com minha conta → Criar uma nova banda**.
 2. Crie a conta no app, confirme o e-mail se solicitado e entre. O código da banda aparecerá na tela.
-3. Em cada tablet: **Conectar à banda → Sou músico**, e digite o código de 12 caracteres.
+3. Em qualquer aparelho: **Conectar à banda → Pelo código**, e digite o código de 12 caracteres. Já pode receber e enviar hinos, sem liberar e-mail.
 4. No celular: **Repertório → Enviar partituras**, escolha os PDFs, sábado/domingo e o grupo.
 5. Aguarde os tablets baixarem. O símbolo **✓** ao lado da partitura indica que está salva no aparelho.
 
@@ -57,11 +57,9 @@ A tela já deixa de mostrar hinos antigos na segunda-feira. Para também liberar
 
 Essa etapa usa a CLI do Supabase e um segredo próprio para a limpeza. O segredo fica no servidor e não nos tablets. Se preferir, faça primeiro os passos 1 a 6 e podemos terminar juntos o agendamento depois.
 
-## Atualizar um projeto existente para vários responsáveis
+## Atualizar o projeto existente para envio por todos (0.3.10)
 
-Em uma **nova consulta** no SQL Editor, cole o conteúdo atual de `supabase/migrations/20261010_multiple_directors.sql` e execute. Não execute `schema.sql` novamente em um banco já criado. A migração preserva bandas, contas e PDFs e também atualiza as políticas de upload.
-
-O envio por mais de um responsável e a hospedagem web estão explicados no `GUIA_HOSPEDAGEM.md`.
+Em uma nova consulta no SQL Editor, execute `supabase/migrations/20261018_member_uploads.sql`. Não execute `schema.sql` novamente no banco existente. A regra libera os uploads semanais e de festividades para membros da banda, inclusive anônimos; preserva os dados e as restrições de exclusão. Publique a nova versão web/APK e a função `/api/drive` para liberar também a importação da programação.
 
 ## Correção de envio no Android (versão 0.2.1)
 

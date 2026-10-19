@@ -3,7 +3,7 @@ import {nativeAndroid} from './native';
 import type {DrivePdf,ProgramSong} from './program';
 async function request(action:'catalog'|'file',extra:Record<string,unknown>) {
   if(!cloud)throw new Error('Conecte sua conta à banda.');
-  const {data:{session}}=await cloud.auth.getSession();if(!session)throw new Error('Entre com sua conta de responsável.');
+  const {data:{session}}=await cloud.auth.getSession();if(!session)throw new Error('Conecte este aparelho à banda.');
   const base=nativeAndroid?(import.meta.env.VITE_PUBLIC_APP_URL||'https://shalomsetlist.pages.dev'):location.origin;
   const response=await fetch(`${base}/api/drive`,{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`,'Content-Type':'application/json'},body:JSON.stringify({action,...extra}),signal:AbortSignal.timeout(200000)});
   const data=await response.json();if(!response.ok||data.error)throw new Error(data.error||'Não foi possível consultar o Drive.');return data;

@@ -11,16 +11,16 @@ export async function onRequest({request,env}) {
   if(!supabase||!key||!bridge||!secret||!room)return reply({error:'A integração do Drive ainda não foi configurada. Veja o guia de automação.'},503);
   if(!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(bridge))return reply({error:'Endereço da integração inválido.'},503);
   const authorization=request.headers.get('Authorization')||'';
-  if(!authorization.startsWith('Bearer ')||authorization.length>5000)return reply({error:'Entre com sua conta de responsável.'},401);
+  if(!authorization.startsWith('Bearer ')||authorization.length>5000)return reply({error:'Conecte este aparelho à banda.'},401);
   try{
     const authHeaders={apikey:key,Authorization:authorization};
     const userResponse=await fetch(`${supabase}/auth/v1/user`,{headers:authHeaders,signal:AbortSignal.timeout(10000)});
-    if(!userResponse.ok)return reply({error:'Entre novamente com sua conta de responsável.'},401);
-    const user=await userResponse.json();if(user.is_anonymous)return reply({error:'Somente responsáveis podem buscar as partituras.'},403);
+    if(!userResponse.ok)return reply({error:'Conecte este aparelho novamente à banda.'},401);
+    const user=await userResponse.json();
     const membersUrl=new URL(`${supabase}/rest/v1/members`);
-    membersUrl.search=new URLSearchParams({select:'room_id,role',user_id:`eq.${user.id}`,room_id:`eq.${room}`,role:'eq.director',limit:'1'}).toString();
+    membersUrl.search=new URLSearchParams({select:'room_id',user_id:`eq.${user.id}`,room_id:`eq.${room}`,limit:'1'}).toString();
     const members=await fetch(membersUrl,{headers:authHeaders,signal:AbortSignal.timeout(10000)});
-    if(!members.ok||(await members.json()).length!==1)return reply({error:'Acesso restrito aos responsáveis desta banda.'},403);
+    if(!members.ok||(await members.json()).length!==1)return reply({error:'Entre pelo código desta banda para acessar as partituras.'},403);
     if(Number(request.headers.get('Content-Length')||0)>20000)return reply({error:'Pedido muito grande.'},413);
     const raw=await request.text();if(raw.length>20000)return reply({error:'Pedido muito grande.'},413);
     const body=JSON.parse(raw);

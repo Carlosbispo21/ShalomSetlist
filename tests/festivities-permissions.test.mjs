@@ -16,7 +16,7 @@ test('festividades persistem e respeitam permissões e caminhos privados', async
     create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb) $$;
     create table public.rooms(id uuid primary key,name text,owner_id uuid unique references auth.users,join_code text);
     create table public.members(user_id uuid primary key references auth.users,room_id uuid references public.rooms);
-    create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);
+    create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,owner_id text default auth.uid()::text);
     create function storage.foldername(path text) returns text[] language sql immutable as $$ select (string_to_array(path,'/'))[1:array_length(string_to_array(path,'/'),1)-1] $$;
     create function public.shalom_week() returns date language sql stable as $$ select date '2026-10-12' $$;
   `);
@@ -80,6 +80,40 @@ test('festividades persistem e respeitam permissões e caminhos privados', async
     await actor(owner);
     assert.equal((await db.query('delete from storage.objects returning id')).rows.length,1);
     assert.equal((await db.query('delete from public.scores returning id')).rows.length,1);
+  });
+  await t.test('nova regra permite enviar pelo código sem liberar conta, preservando isolamento e exclusões',async()=>{
+    await db.exec('reset role');
+    const migration=await readFile(new URL('../supabase/migrations/20261018_member_uploads.sql',import.meta.url),'utf8');
+    await db.exec(migration);await db.exec(migration);
+    for(const anonymous of [false,true]) {
+      await actor(musician,anonymous);
+      for(const [id,scope,week,folder] of [[eventId,'festivity',null,'festivity'],[weeklyId,'weekly','2026-10-12','2026-10-12']]) {
+        const path=`${band}/${folder}/${id}.pdf`;
+        await db.query('insert into storage.objects(bucket_id,name) values($1,$2)',['scores',path]);
+        await score(id,scope,week,path);
+        assert.equal((await db.query('delete from public.scores returning id')).rows.length,0);
+        assert.equal((await db.query('delete from storage.objects returning id')).rows.length,0);
+        await actor(outsider);
+        assert.equal((await db.query('select * from public.scores')).rows.length,0);
+        assert.equal((await db.query('select * from storage.objects')).rows.length,0);
+        await assert.rejects(score(id,scope,week,path),/row-level security/);
+        await assert.rejects(db.query('insert into storage.objects(bucket_id,name) values($1,$2)',['scores',path]),/row-level security/);
+        await actor(owner);
+        await db.query('delete from storage.objects');await db.query('delete from public.scores');
+        await actor(musician,anonymous);
+      }
+    }
+    await actor(musician,true);
+    await assert.rejects(db.query('insert into storage.objects(bucket_id,name) values($1,$2)',['scores',`${band}/2026-10-05/expired.pdf`]),/row-level security/);
+    const orphan=`${band}/festivity/orphan.pdf`;
+    await db.query('insert into storage.objects(bucket_id,name) values($1,$2)',['scores',orphan]);
+    await actor(owner);
+    await db.query('insert into storage.objects(bucket_id,name) values($1,$2)',['scores',`${band}/festivity/owner-orphan.pdf`]);
+    await actor(musician,true);
+    assert.deepEqual((await db.query('delete from storage.objects returning name')).rows.map(row=>row.name),[orphan]);
+    await actor('44444444-4444-4444-8444-444444444444',true);
+    await assert.rejects(score(eventId,'festivity',null,`${band}/festivity/${eventId}.pdf`),/row-level security/);
+    assert.equal((await db.query('select * from storage.objects')).rows.length,0);
   });
   await db.close();
 });

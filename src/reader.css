@@ -1,5 +1,7 @@
 /* A folha ocupa o visor; nenhum controle reserva espaço na leitura. */
 .raster-surface>canvas{display:block;width:100%;height:auto}
+.reload-score{flex-shrink:0}
+@media(max-width:600px){.reload-score span{display:none}.reload-score{padding:8px}}
 .immersive .pages-container.page-stage{display:block;position:relative;overflow:hidden}
 .immersive .page-stage>.page-pane{position:absolute;top:0;left:0;height:100%;max-width:none;margin:0;display:flex;align-items:center;justify-content:center;background:#fff;transition:transform .18s cubic-bezier(.22,.61,.36,1);will-change:transform}
 .page-stage .page-paper{flex-shrink:0}

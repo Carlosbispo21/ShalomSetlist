@@ -12,7 +12,7 @@ Aplicativo para a banda da igreja: repertório semanal por sábado/domingo e por
 - Salva PDFs em IndexedDB; após o download, a leitura funciona sem internet.
 - Mantém a tela acesa durante a leitura quando o aparelho oferece suporte.
 - Verifica versões web e APKs publicados e oferece atualização ao sair do leitor.
-- Com Supabase configurado: responsável com e-mail/senha, banda com código de 12 caracteres, músicos com login anônimo, PDFs privados, permissões por banda e notificações de novos hinos. Uma consulta a cada 30 segundos também recupera atualizações perdidas.
+- Com Supabase configurado: banda com código de 12 caracteres, envio por qualquer membro com login anônimo e conta com e-mail/senha opcional, PDFs privados, permissões por banda e notificações de novos hinos. Uma consulta a cada 30 segundos também recupera atualizações perdidas.
 - Na segunda à meia-noite em `America/Sao_Paulo`, o repertório anterior deixa de aparecer; os arquivos locais antigos são removidos ao abrir/retomar o app ou na checagem de um minuto. O Cron abaixo apaga os arquivos no servidor sem depender de um aparelho aberto.
 
 Os exemplos são partituras fictícias criadas para testar o leitor. Não são hinos oficiais. O app inicia vazio; toque em **Explorar com exemplos** se quiser experimentar.
@@ -43,16 +43,20 @@ Os testes de navegador usam Chrome instalado. `dist/` contém a versão web para
 3. Em Authentication → Providers, habilite **Anonymous Sign-Ins**. Mantenha e-mail/senha habilitado. O app respeita a confirmação de e-mail: se ativada, confirme o e-mail antes de entrar. Para uma banda fechada, você também pode criar previamente a conta do responsável pelo painel e manter cadastro público desativado.
 4. Copie `.env.example` para `.env` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com a URL e a chave pública `anon` (legacy) ou publishable do projeto. Nunca use `service_role` ou secret key aqui.
 5. Reinicie `npm run dev`, ou recompile `npm run build` e o APK. A configuração é embutida na compilação; um APK anterior à configuração continua no modo local.
-6. No celular, abra **Nossa banda → Conectar à banda → Sou responsável**. Crie uma conta (ou entre na conta criada no painel). A banda e seu código são criados no primeiro acesso.
-7. Em cada tablet, abra **Sou músico** e digite o código mostrado no celular. Depois o responsável envia PDFs em **Repertório**. Os aparelhos recebem a lista e baixam os PDFs.
+6. Para criar a primeira banda, abra **Nossa banda → Conectar à banda → Com minha conta**, marque **Criar uma nova banda** e crie sua conta. Para uma banda existente, use o código já compartilhado.
+7. Em qualquer aparelho, abra **Pelo código** e digite o código da banda. Todos já podem usar **Enviar partituras** e **Importar programação**, sem cadastro ou liberação por e-mail.
 
-Músicos leem os PDFs da banda, mas não podem enviar/remover repertório. O código permite entrar na banda: compartilhe somente com seus músicos. As anotações não são sincronizadas. PDFs locais adicionados antes da conexão permanecem locais; envie-os novamente pelo acesso do responsável para distribuí-los.
+Todos os membros podem ler e enviar PDFs da própria banda. As permissões de exclusão existentes foram preservadas. O código permite entrar na banda: compartilhe somente com seus músicos. As anotações não são sincronizadas. PDFs locais adicionados antes da conexão permanecem locais; envie-os novamente após conectar à banda para distribuí-los.
 
-### Vários responsáveis e versão 0.2.0
+### Atualizar o envio para todos os membros (0.3.10)
 
-Cada responsável usa e-mail/senha próprios. Uma conta entra na banda pelo código e recebe o papel de responsável somente depois de ser autorizada por um responsável existente na tela **Banda → Responsáveis**. Músicos não podem se promover; o criador não pode perder a permissão por essa tela. A revogação é aplicada no banco imediatamente, e a interface recupera os papéis durante a sincronização.
+Em um banco existente atualizado até a 0.3.9, execute `supabase/migrations/20261018_member_uploads.sql` no SQL Editor. A migração pode ser repetida e preserva bandas, contas e PDFs. Em projeto novo, `supabase/schema.sql` já inclui a regra. Publique também o app e `functions/api/drive.js`; só atualizar a interface não libera o envio no banco.
 
-Se o banco já existia antes da versão 0.2.0, execute **somente** `supabase/migrations/20261010_multiple_directors.sql` no SQL Editor. Para projeto novo, `supabase/schema.sql` já inclui essa atualização. Os testes em `tests/permissions.test.mjs` executam a migração em um PostgreSQL em memória e verificam upload, papéis, revogação e isolamento entre bandas.
+Quem entra pelo código já pode enviar partituras semanais e de festividades, inclusive com sessão anônima. Não há liberação de desenvolvedor ou responsável para enviar hinos. As regras de exclusão continuam restritas aos acessos anteriores; um músico só pode limpar o próprio upload incompleto, sem remover PDFs publicados.
+
+Os testes de permissões executam PostgreSQL local, verificando tanto as migrações históricas quanto a regra atual, inclusive isolamento entre bandas.
+
+O botão **Recarregar** dentro da partitura reinicia o leitor e baixa uma nova cópia quando conectado; offline, reabre o arquivo local. Preserva a página e as anotações, sem apagar os dados do site. Uma cópia local inválida recebe uma tentativa automática de recuperação pela rede.
 
 Leia `GUIA_HOSPEDAGEM.md` para conectar o GitHub ao Cloudflare Pages e instalar no iPad pelo Safari. O envio de `artifacts/shalom-web.zip` também está explicado como alternativa.
 
@@ -111,4 +115,4 @@ O sistema usa o relógio do aparelho para a limpeza local e o relógio do servid
 - `src/sync.ts`: integração Supabase.
 - `supabase/`: banco, permissões e limpeza agendada.
 
-Para validar a sincronização de verdade, configure Supabase, abra dois aparelhos/contextos diferentes, entre como responsável em um e músico no outro, envie um PDF e confirme recebimento, download e bloqueio de envio pelo músico. Essa validação depende de um projeto real; os testes locais não a substituem.
+Para validar a sincronização de verdade, configure Supabase, abra dois aparelhos/contextos diferentes, entre pelo código nos dois, envie um PDF em cada aparelho e confirme recebimento, download e isolamento de outra banda. Essa validação depende de um projeto real; os testes locais não a substituem.
